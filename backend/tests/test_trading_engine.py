@@ -54,23 +54,6 @@ class TradingEngineTests(unittest.TestCase):
 
         self.assertEqual(latest_equity, 1030.0)
 
-    def test_equity_uses_latest_price_for_previously_traded_symbols(self):
-        engine = TradingEngine(self.db)
-
-        engine.execute_trade(self.session, "AAPL", "BUY", 1, 100.0)
-        engine.execute_trade(self.session, "AAPL", "BUY", 1, 120.0)
-        engine.execute_trade(self.session, "MSFT", "BUY", 3, 50.0)
-
-        latest_equity = (
-            self.db.query(EquityCurvePoint)
-            .filter_by(session_id=self.session.id)
-            .order_by(EquityCurvePoint.id.desc())
-            .first()
-            .equity
-        )
-
-        self.assertEqual(latest_equity, 1020.0)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,20 +18,20 @@ class TradingEngine:
             total_cost = position.average_cost * position.quantity + notional
             position.quantity += quantity
             position.average_cost = total_cost / position.quantity
+            position.last_price = price
             session.cash_balance -= notional
         elif side == "SELL":
             if position.quantity < quantity:
                 raise ValueError("持仓数量不足")
             position.quantity -= quantity
+            position.last_price = price
             session.cash_balance += notional
         else:
             raise ValueError("side 必须为 BUY 或 SELL")
 
         trade = Trade(session_id=session.id, symbol=symbol, side=side, quantity=quantity, price=price)
         self.db.add(trade)
-        self.db.flush()
-
-        self.db.add(EquityCurvePoint(session_id=session.id, equity=self._calculate_equity(session, trade)))
+        self.db.add(EquityCurvePoint(session_id=session.id, equity=self._calculate_equity(session)))
         self.db.commit()
         self.db.refresh(trade)
         return trade
@@ -44,22 +44,10 @@ class TradingEngine:
             self.db.flush()
         return position
 
-    def _calculate_equity(self, session: TrainingSession, latest_trade: Trade) -> float:
-        """Compute cash plus every open position marked to the latest known price."""
-        latest_prices = self._latest_prices_by_symbol(session.id, latest_trade)
+    def _calculate_equity(self, session: TrainingSession) -> float:
+        """Compute cash plus every open position marked to its latest trade price."""
         positions_value = 0.0
         for position in self.db.query(Position).filter(Position.session_id == session.id, Position.quantity > 0):
-            mark_price = latest_prices.get(position.symbol, position.average_cost)
-            positions_value += position.quantity * mark_price
+            positions_value += position.quantity * position.last_price
 
         return session.cash_balance + positions_value
-
-    def _latest_prices_by_symbol(self, session_id: int, latest_trade: Trade) -> dict[str, float]:
-        prices = {latest_trade.symbol: latest_trade.price}
-        for trade in (
-            self.db.query(Trade)
-            .filter(Trade.session_id == session_id, Trade.symbol != latest_trade.symbol)
-            .order_by(Trade.executed_at.desc(), Trade.id.desc())
-        ):
-            prices.setdefault(trade.symbol, trade.price)
-        return prices
