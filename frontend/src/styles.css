@@ -44,3 +44,15 @@ input {
 pre { overflow: auto; background: #0f172a; color: #e2e8f0; border-radius: 12px; padding: 1rem; }
 .price-list { padding-left: 1.25rem; }
 @media (max-width: 780px) { .hero, .grid { grid-template-columns: 1fr; } }
+.form-stack { display: grid; gap: 1rem; }
+.form-stack label { display: grid; gap: 0.4rem; font-weight: 700; }
+button:disabled { cursor: not-allowed; opacity: 0.6; }
+.error { color: #dc2626; font-weight: 700; }
+.muted { color: #64748b; }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
+.metrics div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0.85rem; }
+.metrics dt { color: #64748b; font-size: 0.85rem; }
+.metrics dd { margin: 0.25rem 0 0; font-size: 1.1rem; font-weight: 800; }
+.market-card { margin-top: 1.5rem; }
+.market-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 780px) { .market-metrics, .metrics { grid-template-columns: 1fr; } }
