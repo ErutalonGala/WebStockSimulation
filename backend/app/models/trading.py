@@ -41,6 +41,7 @@ class Position(Base):
     symbol: Mapped[str] = mapped_column(String(16), index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     average_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    last_price: Mapped[float] = mapped_column(Float, default=0.0)
 
     session: Mapped[TrainingSession] = relationship(back_populates="positions")
 
