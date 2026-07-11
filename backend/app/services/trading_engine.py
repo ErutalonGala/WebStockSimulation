@@ -18,18 +18,20 @@ class TradingEngine:
             total_cost = position.average_cost * position.quantity + notional
             position.quantity += quantity
             position.average_cost = total_cost / position.quantity
+            position.last_price = price
             session.cash_balance -= notional
         elif side == "SELL":
             if position.quantity < quantity:
                 raise ValueError("持仓数量不足")
             position.quantity -= quantity
+            position.last_price = price
             session.cash_balance += notional
         else:
             raise ValueError("side 必须为 BUY 或 SELL")
 
         trade = Trade(session_id=session.id, symbol=symbol, side=side, quantity=quantity, price=price)
         self.db.add(trade)
-        self.db.add(EquityCurvePoint(session_id=session.id, equity=session.cash_balance + position.quantity * price))
+        self.db.add(EquityCurvePoint(session_id=session.id, equity=self._calculate_equity(session)))
         self.db.commit()
         self.db.refresh(trade)
         return trade
@@ -41,3 +43,11 @@ class TradingEngine:
             self.db.add(position)
             self.db.flush()
         return position
+
+    def _calculate_equity(self, session: TrainingSession) -> float:
+        """Compute cash plus every open position marked to its latest trade price."""
+        positions_value = 0.0
+        for position in self.db.query(Position).filter(Position.session_id == session.id, Position.quantity > 0):
+            positions_value += position.quantity * position.last_price
+
+        return session.cash_balance + positions_value

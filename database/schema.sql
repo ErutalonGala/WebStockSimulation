@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS positions (
   symbol TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 0,
   average_cost REAL NOT NULL DEFAULT 0,
+  last_price REAL NOT NULL DEFAULT 0,
   UNIQUE(session_id, symbol)
 );
 
