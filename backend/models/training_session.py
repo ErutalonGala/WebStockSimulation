@@ -1,0 +1,76 @@
+"""Training-session domain models for day-by-day market simulation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from backend.services.market_data import DailyBar
+
+
+@dataclass
+class TradeRecord:
+    """A historical trade attached to a training session."""
+
+    symbol: str
+    side: str
+    quantity: int
+    price: float
+    trade_date: str
+    executed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@dataclass
+class AssetSnapshot:
+    """Daily portfolio snapshot captured for a training session."""
+
+    date: str
+    cash: float
+    position_quantity: int
+    position_cost: float
+    close_price: float
+    market_value: float
+    total_assets: float
+
+
+@dataclass
+class TrainingSession:
+    """State for one stock training simulation."""
+
+    symbol: str
+    start_date: str
+    initial_cash: float
+    market_data: list[DailyBar]
+    id: str = field(default_factory=lambda: uuid4().hex)
+    current_day_index: int = 0
+    current_cash: float = 0.0
+    current_position_quantity: int = 0
+    current_position_cost: float = 0.0
+    trade_history: list[TradeRecord] = field(default_factory=list)
+    daily_snapshots: list[AssetSnapshot] = field(default_factory=list)
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def __post_init__(self) -> None:
+        if not self.current_cash:
+            self.current_cash = self.initial_cash
+
+    @property
+    def current_bar(self) -> DailyBar:
+        return self.market_data[self.current_day_index]
+
+    def capture_snapshot(self) -> AssetSnapshot:
+        close_price = self.current_bar.close or self.current_bar.adj_close or 0.0
+        market_value = round(self.current_position_quantity * close_price, 2)
+        total_assets = round(self.current_cash + market_value, 2)
+        snapshot = AssetSnapshot(
+            date=self.current_bar.date,
+            cash=round(self.current_cash, 2),
+            position_quantity=self.current_position_quantity,
+            position_cost=round(self.current_position_cost, 6),
+            close_price=round(close_price, 6),
+            market_value=market_value,
+            total_assets=total_assets,
+        )
+        self.daily_snapshots.append(snapshot)
+        return snapshot

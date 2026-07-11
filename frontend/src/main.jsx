@@ -1,36 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+function money(value) {
+  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' }).format(value || 0);
+}
+
 function App() {
-  const [health, setHealth] = useState('检查中...');
-  const [session, setSession] = useState(null);
   const [symbol, setSymbol] = useState('AAPL');
-  const [prices, setPrices] = useState([]);
+  const [startDate, setStartDate] = useState('2024-01-02');
+  const [initialCash, setInitialCash] = useState(100000);
+  const [session, setSession] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/health`)
-      .then((res) => res.json())
-      .then((data) => setHealth(data.status))
-      .catch(() => setHealth('后端未连接'));
-  }, []);
-
-  async function createSession() {
-    const response = await fetch(`${API_BASE_URL}/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_name: 'demo-user', initial_cash: 100000 })
-    });
-    setSession(await response.json());
-  }
-
-  async function loadPrices() {
-    const response = await fetch(`${API_BASE_URL}/market-data/${symbol}`);
+  async function request(path, options = {}) {
+    const response = await fetch(`${API_BASE_URL}${path}`, options);
     const data = await response.json();
-    setPrices(data.prices);
+    if (!response.ok) {
+      throw new Error(data.detail || '请求失败');
+    }
+    return data;
   }
+
+  async function createSession(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const data = await request('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, start_date: startDate, initial_cash: Number(initialCash) })
+      });
+      setSession(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function nextDay() {
+    if (!session) return;
+    setLoading(true);
+    setError('');
+    try {
+      setSession(await request(`/api/sessions/${session.id}/next-day`, { method: 'POST' }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const bar = session?.current_bar;
 
   return (
     <main className="app-shell">
@@ -38,36 +64,68 @@ function App() {
         <div>
           <p className="eyebrow">Trading Trainer</p>
           <h1>股票模拟交易训练平台</h1>
-          <p>集成历史行情、模拟交易引擎、训练会话和资金曲线记录，帮助用户复盘并训练交易策略。</p>
+          <p>创建训练会话后，点击“下一天”会沿历史行情中的有效交易日推进，自动跳过周末、节假日和无行情日期。</p>
         </div>
         <div className="status-card">
-          <span>后端状态</span>
-          <strong>{health}</strong>
+          <span>当前训练日</span>
+          <strong>{session ? session.current_trading_date : '未开始'}</strong>
         </div>
       </section>
 
       <section className="grid">
         <article className="card">
-          <h2>训练会话</h2>
-          <p>创建一段独立训练，后端会初始化现金、持仓和资金曲线。</p>
-          <button onClick={createSession}>创建 Demo 会话</button>
-          {session && <pre>{JSON.stringify(session, null, 2)}</pre>}
+          <h2>创建训练会话</h2>
+          <form onSubmit={createSession} className="form-stack">
+            <label>
+              股票代码
+              <input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} placeholder="AAPL" />
+            </label>
+            <label>
+              开始日期
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </label>
+            <label>
+              初始资金
+              <input type="number" min="1" value={initialCash} onChange={(event) => setInitialCash(event.target.value)} />
+            </label>
+            <button disabled={loading}>{loading ? '处理中...' : '创建会话'}</button>
+          </form>
+          {error && <p className="error">{error}</p>}
         </article>
 
         <article className="card">
-          <h2>股票历史数据</h2>
-          <p>输入股票代码，加载后端示例行情模块返回的历史价格。</p>
-          <div className="row">
-            <input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} />
-            <button onClick={loadPrices}>获取数据</button>
-          </div>
-          <ul className="price-list">
-            {prices.map((price) => (
-              <li key={price.date}>{price.date}: ${price.close}</li>
-            ))}
-          </ul>
+          <h2>会话资产</h2>
+          {session ? (
+            <>
+              <dl className="metrics">
+                <div><dt>现金</dt><dd>{money(session.current_cash)}</dd></div>
+                <div><dt>持仓数量</dt><dd>{session.current_position_quantity}</dd></div>
+                <div><dt>持仓成本</dt><dd>{money(session.current_position_cost)}</dd></div>
+                <div><dt>持仓市值</dt><dd>{money(session.market_value)}</dd></div>
+                <div><dt>总资产</dt><dd>{money(session.total_assets)}</dd></div>
+              </dl>
+              <button onClick={nextDay} disabled={loading || session.is_complete}>下一天</button>
+              {session.is_complete && <p className="muted">已到达最后一个有效交易日。</p>}
+            </>
+          ) : (
+            <p className="muted">请先创建训练会话。</p>
+          )}
         </article>
       </section>
+
+      {bar && (
+        <section className="card market-card">
+          <h2>当日行情</h2>
+          <dl className="metrics market-metrics">
+            <div><dt>日期</dt><dd>{bar.date}</dd></div>
+            <div><dt>开盘</dt><dd>{money(bar.open)}</dd></div>
+            <div><dt>最高</dt><dd>{money(bar.high)}</dd></div>
+            <div><dt>最低</dt><dd>{money(bar.low)}</dd></div>
+            <div><dt>收盘</dt><dd>{money(bar.close)}</dd></div>
+            <div><dt>成交量</dt><dd>{bar.volume?.toLocaleString() || '-'}</dd></div>
+          </dl>
+        </section>
+      )}
     </main>
   );
 }

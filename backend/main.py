@@ -1,4 +1,4 @@
-"""FastAPI entrypoint exposing stock history endpoints."""
+"""FastAPI entrypoint exposing stock history and training-session endpoints."""
 
 from __future__ import annotations
 
@@ -13,33 +13,23 @@ from backend.services.market_data import (
     InvalidSymbolError,
     MarketDataService,
 )
-from backend.services.trading_engine import OrderCommand, TradingCostConfig, TradingEngine, TradingRuleError
+from backend.services.training_session import (
+    TrainingSessionCompleteError,
+    TrainingSessionNotFoundError,
+    TrainingSessionService,
+)
 
 app = FastAPI(title="codex_rp market data API")
 market_data_service = MarketDataService()
-trading_engine = TradingEngine()
-trading_sessions: dict[str, TradingSessionState] = {}
+training_session_service = TrainingSessionService(market_data_service=market_data_service)
 
 
-class TradingSessionCreate(BaseModel):
-    """Request body for creating or resetting a trading session."""
-
-    initial_cash: float = Field(default=100000.0, gt=0)
-
-
-class OrderCreate(BaseModel):
-    """Request body for executing an order in a trading session."""
+class TrainingSessionCreate(BaseModel):
+    """Request body for creating a training session."""
 
     symbol: str = Field(min_length=1, max_length=32)
-    side: OrderSide
-    quantity: int = Field(gt=0)
-    price_mode: PriceMode = PriceMode.CUSTOM
-    close_price: float | None = Field(default=None, gt=0)
-    next_open_price: float | None = Field(default=None, gt=0)
-    custom_price: float | None = Field(default=None, gt=0)
-    fee_rate: float = Field(default=0.0003, ge=0)
-    stamp_tax_rate: float = Field(default=0.001, ge=0)
-    slippage_rate: float = Field(default=0.0, ge=0)
+    start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    initial_cash: float = Field(gt=0)
 
 
 @app.get("/api/stocks/{symbol}/history")
@@ -70,45 +60,43 @@ def get_stock_history(
     }
 
 
-@app.post("/api/sessions/{session_id}")
-def create_trading_session(session_id: str, payload: TradingSessionCreate) -> dict[str, object]:
-    """Create or reset a simulated trading session with an initial cash balance."""
+@app.post("/api/sessions")
+def create_training_session(payload: TrainingSessionCreate) -> dict[str, object]:
+    """Create a training session starting at the next available trading day."""
 
-    session = TradingSessionState(
-        session_id=session_id,
-        initial_cash=payload.initial_cash,
-        cash=payload.initial_cash,
-    )
-    trading_sessions[session_id] = session
-    return {"success": True, "session": session.to_dict()}
-
-
-@app.post("/api/sessions/{session_id}/orders")
-def create_order(session_id: str, payload: OrderCreate) -> dict[str, object]:
-    """Execute a buy or sell order and return updated cash, position, P&L, and records."""
-
-    session = trading_sessions.setdefault(
-        session_id,
-        TradingSessionState(session_id=session_id, initial_cash=100000.0, cash=100000.0),
-    )
     try:
-        result = trading_engine.execute_order(
-            session,
-            OrderCommand(
-                symbol=payload.symbol,
-                side=payload.side,
-                quantity=payload.quantity,
-                price_mode=payload.price_mode,
-                close_price=payload.close_price,
-                next_open_price=payload.next_open_price,
-                custom_price=payload.custom_price,
-                costs=TradingCostConfig(
-                    fee_rate=payload.fee_rate,
-                    stamp_tax_rate=payload.stamp_tax_rate,
-                    slippage_rate=payload.slippage_rate,
-                ),
-            ),
+        return training_session_service.create_session(
+            symbol=payload.symbol,
+            start_date=payload.start_date,
+            initial_cash=payload.initial_cash,
         )
-    except TradingRuleError as exc:
-        raise HTTPException(status_code=400, detail={"success": False, "error": str(exc)}) from exc
-    return result.to_dict()
+    except InvalidSymbolError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DataSourceRateLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except DataSourceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/sessions/{session_id}")
+def get_training_session(session_id: str) -> dict[str, object]:
+    """Return the current state of a training session."""
+
+    try:
+        return training_session_service.get_session(session_id)
+    except TrainingSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/sessions/{session_id}/next-day")
+def advance_training_session(session_id: str) -> dict[str, object]:
+    """Advance a training session to the next valid market-data trading day."""
+
+    try:
+        return training_session_service.next_day(session_id)
+    except TrainingSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TrainingSessionCompleteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
