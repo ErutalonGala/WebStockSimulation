@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.models.order import OrderSide, PriceMode
+from backend.models.position import TradingSessionState
 from backend.services.market_data import (
     DataSourceRateLimitError,
     DataSourceUnavailableError,
