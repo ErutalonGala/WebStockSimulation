@@ -29,7 +29,9 @@ class TradingEngine:
 
         trade = Trade(session_id=session.id, symbol=symbol, side=side, quantity=quantity, price=price)
         self.db.add(trade)
-        self.db.add(EquityCurvePoint(session_id=session.id, equity=session.cash_balance + position.quantity * price))
+        self.db.flush()
+
+        self.db.add(EquityCurvePoint(session_id=session.id, equity=self._calculate_equity(session, trade)))
         self.db.commit()
         self.db.refresh(trade)
         return trade
@@ -41,3 +43,23 @@ class TradingEngine:
             self.db.add(position)
             self.db.flush()
         return position
+
+    def _calculate_equity(self, session: TrainingSession, latest_trade: Trade) -> float:
+        """Compute cash plus every open position marked to the latest known price."""
+        latest_prices = self._latest_prices_by_symbol(session.id, latest_trade)
+        positions_value = 0.0
+        for position in self.db.query(Position).filter(Position.session_id == session.id, Position.quantity > 0):
+            mark_price = latest_prices.get(position.symbol, position.average_cost)
+            positions_value += position.quantity * mark_price
+
+        return session.cash_balance + positions_value
+
+    def _latest_prices_by_symbol(self, session_id: int, latest_trade: Trade) -> dict[str, float]:
+        prices = {latest_trade.symbol: latest_trade.price}
+        for trade in (
+            self.db.query(Trade)
+            .filter(Trade.session_id == session_id, Trade.symbol != latest_trade.symbol)
+            .order_by(Trade.executed_at.desc(), Trade.id.desc())
+        ):
+            prices.setdefault(trade.symbol, trade.price)
+        return prices
