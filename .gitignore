@@ -1,11 +1,1 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
 
-# Node
-node_modules/
-dist/
-
-# Local database
-*.db
