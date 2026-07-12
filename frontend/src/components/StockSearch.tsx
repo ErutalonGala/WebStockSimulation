@@ -41,7 +41,7 @@ export default function StockSearch({
         <input
           type="number"
           min="1"
-          step="100"
+          step="1"
           value={initialCash}
           onChange={(event) => onInitialCashChange(event.target.value)}
           required
