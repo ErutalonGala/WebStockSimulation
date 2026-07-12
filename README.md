@@ -43,12 +43,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+也可以在仓库根目录直接启动同一个应用：
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 后端启动后可访问：
 
-- `GET http://localhost:8000/health`
-- `GET http://localhost:8000/market-data/AAPL`
-- `POST http://localhost:8000/sessions`
-- `POST http://localhost:8000/sessions/{session_id}/trades`
+- `GET http://localhost:8000/api/stocks/AAPL/history`
+- `GET http://localhost:8000/api/sessions`
+- `POST http://localhost:8000/api/sessions`
+- `POST http://localhost:8000/api/sessions/{session_id}/next-day`
+- `POST http://localhost:8000/api/sessions/{session_id}/orders`
 
 ## 前端启动
 
@@ -74,10 +81,4 @@ VITE_API_BASE_URL=http://localhost:8000 npm run dev
 sqlite:///./database/trading_trainer.db
 ```
 
-从仓库根目录启动后端时，SQLite 文件会生成在 `database/trading_trainer.db`。如果要切换到 PostgreSQL，可将 `backend/app/db/session.py` 中的 `DATABASE_URL` 替换为类似：
-
-```text
-postgresql+psycopg://user:password@localhost:5432/trading_trainer
-```
-
-并安装对应数据库驱动。
+从仓库根目录启动后端时，SQLite 文件会生成在 `database/trading_trainer.db`。当前持久化层位于 `backend/db/persistence.py`，使用标准库 `sqlite3`；如需切换到 PostgreSQL，需要新增对应数据库适配层并调整仓库实现。
