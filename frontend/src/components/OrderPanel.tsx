@@ -11,6 +11,7 @@ type OrderPanelProps = {
   onBuy: () => void;
   onSell: () => void;
   onNextDay: () => void;
+  onNextWeek: () => void;
 };
 
 export default function OrderPanel({
@@ -24,6 +25,7 @@ export default function OrderPanel({
   onBuy,
   onSell,
   onNextDay,
+  onNextWeek,
 }: OrderPanelProps) {
   return (
     <div className="form-stack">
@@ -51,9 +53,14 @@ export default function OrderPanel({
         />
       </label>
       <button type="button" onClick={onSell} disabled={disabled || loading}>卖出</button>
-      <button type="button" className="secondary-button" onClick={onNextDay} disabled={disabled || loading || isComplete}>
-        下一交易日
-      </button>
+      <div className="button-row">
+        <button type="button" className="secondary-button" onClick={onNextDay} disabled={disabled || loading || isComplete}>
+          下一交易日
+        </button>
+        <button type="button" className="secondary-button" onClick={onNextWeek} disabled={disabled || loading || isComplete}>
+          下一周
+        </button>
+      </div>
     </div>
   );
 }

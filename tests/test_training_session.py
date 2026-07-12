@@ -8,7 +8,10 @@ import pytest
 from backend.db.persistence import TrainingSessionRepository
 from backend.models.training_session import TrainingSession
 from backend.services.market_data import DailyBar
-from backend.services.training_session import TrainingSessionCompleteError, TrainingSessionService
+from backend.services.training_session import (
+    TrainingSessionCompleteError,
+    TrainingSessionService,
+)
 
 
 class FakeMarketDataService:
@@ -16,8 +19,24 @@ class FakeMarketDataService:
         assert symbol == "AAPL"
         assert start_date == "2024-01-06"
         return [
-            DailyBar(date="2024-01-08", open=100, high=110, low=99, close=105, adj_close=105, volume=1000),
-            DailyBar(date="2024-01-09", open=106, high=112, low=104, close=111, adj_close=111, volume=1200),
+            DailyBar(
+                date="2024-01-08",
+                open=100,
+                high=110,
+                low=99,
+                close=105,
+                adj_close=105,
+                volume=1000,
+            ),
+            DailyBar(
+                date="2024-01-09",
+                open=106,
+                high=112,
+                low=104,
+                close=111,
+                adj_close=111,
+                volume=1200,
+            ),
         ]
 
 
@@ -79,8 +98,7 @@ def test_performance_metrics_and_snapshots_use_current_close():
 def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
     database_path = tmp_path / "legacy.db"
     with sqlite3.connect(database_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE training_sessions (
                 id TEXT PRIMARY KEY,
                 start_date TEXT NOT NULL,
@@ -91,8 +109,7 @@ def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
                 current_position_cost REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+            """)
 
     repository = TrainingSessionRepository(database_path)
     session = TrainingSession(
@@ -100,14 +117,24 @@ def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
         start_date="2024-01-06",
         initial_cash=100000,
         market_data=[
-            DailyBar(date="2024-01-08", open=100, high=110, low=99, close=105, adj_close=105, volume=1000),
+            DailyBar(
+                date="2024-01-08",
+                open=100,
+                high=110,
+                low=99,
+                close=105,
+                adj_close=105,
+                volume=1000,
+            ),
         ],
     )
 
     repository.save_session(session)
 
     with sqlite3.connect(database_path) as conn:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(training_sessions)")}
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(training_sessions)")
+        }
         saved = conn.execute(
             "SELECT symbol, current_positions FROM training_sessions WHERE id = ?",
             (session.id,),
@@ -118,11 +145,11 @@ def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
     assert saved[0] == "AAPL"
     assert json.loads(saved[1])["AAPL"]["symbol"] == "AAPL"
 
+
 def test_repository_rebuilds_legacy_integer_session_ids(tmp_path):
     database_path = tmp_path / "legacy_integer_id.db"
     with sqlite3.connect(database_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE training_sessions (
                 id INTEGER PRIMARY KEY,
                 start_date TEXT NOT NULL,
@@ -133,8 +160,7 @@ def test_repository_rebuilds_legacy_integer_session_ids(tmp_path):
                 current_position_cost REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+            """)
 
     repository = TrainingSessionRepository(database_path)
     session = TrainingSession(
@@ -142,7 +168,15 @@ def test_repository_rebuilds_legacy_integer_session_ids(tmp_path):
         start_date="2024-01-06",
         initial_cash=100000,
         market_data=[
-            DailyBar(date="2024-01-08", open=100, high=110, low=99, close=105, adj_close=105, volume=1000),
+            DailyBar(
+                date="2024-01-08",
+                open=100,
+                high=110,
+                low=99,
+                close=105,
+                adj_close=105,
+                volume=1000,
+            ),
         ],
     )
 
@@ -150,7 +184,9 @@ def test_repository_rebuilds_legacy_integer_session_ids(tmp_path):
 
     with sqlite3.connect(database_path) as conn:
         id_column = next(
-            row for row in conn.execute("PRAGMA table_info(training_sessions)") if row[1] == "id"
+            row
+            for row in conn.execute("PRAGMA table_info(training_sessions)")
+            if row[1] == "id"
         )
         saved = conn.execute(
             "SELECT id, symbol FROM training_sessions WHERE id = ?",
@@ -199,8 +235,7 @@ def test_repository_initializes_empty_database_with_migration_versions(tmp_path)
 def test_repository_skips_previously_applied_001_migration(tmp_path):
     database_path = tmp_path / "applied_001.db"
     with sqlite3.connect(database_path) as conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE schema_migrations (
                 version TEXT PRIMARY KEY,
                 applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -216,8 +251,7 @@ def test_repository_skips_previously_applied_001_migration(tmp_path):
                 current_position_cost REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
-            """
-        )
+            """)
 
     TrainingSessionRepository(database_path)
 
@@ -232,3 +266,77 @@ def test_repository_skips_previously_applied_001_migration(tmp_path):
         "001_training_persistence",
         "002_training_sessions_symbol",
     ]
+
+
+class WeekFakeMarketDataService:
+    def get_history(self, symbol, start_date=None, end_date=None):
+        assert symbol == "AAPL"
+        assert start_date == "2024-01-02"
+        return [
+            DailyBar(
+                date=f"2024-01-{day:02d}",
+                open=100 + day,
+                high=101 + day,
+                low=99 + day,
+                close=100 + day,
+                adj_close=100 + day,
+                volume=1000 + day,
+            )
+            for day in range(2, 10)
+        ]
+
+
+def test_next_week_advances_five_market_bars(tmp_path):
+    repository = TrainingSessionRepository(tmp_path / "week.db")
+    service = TrainingSessionService(
+        market_data_service=WeekFakeMarketDataService(), repository=repository
+    )
+    created = service.create_session("AAPL", "2024-01-02", 100000)
+
+    advanced = service.next_week(created["id"])
+
+    assert advanced["current_trading_date"] == "2024-01-07"
+    assert advanced["current_day_index"] == 5
+    assert advanced["is_complete"] is False
+    assert len(advanced["daily_snapshots"]) == 2
+
+
+def test_next_week_stops_at_final_market_bar_when_less_than_five_days_remain(tmp_path):
+    repository = TrainingSessionRepository(tmp_path / "partial_week.db")
+    service = TrainingSessionService(
+        market_data_service=WeekFakeMarketDataService(), repository=repository
+    )
+    created = service.create_session("AAPL", "2024-01-02", 100000)
+
+    service.next_week(created["id"])
+    advanced = service.next_week(created["id"])
+
+    assert advanced["current_trading_date"] == "2024-01-09"
+    assert advanced["current_day_index"] == 7
+    assert advanced["is_complete"] is True
+    assert len(advanced["daily_snapshots"]) == 3
+
+    with pytest.raises(TrainingSessionCompleteError):
+        service.next_week(created["id"])
+
+
+def test_next_week_api_route_advances_session(monkeypatch, tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    import backend.main as main
+
+    repository = TrainingSessionRepository(tmp_path / "api_week.db")
+    service = TrainingSessionService(
+        market_data_service=WeekFakeMarketDataService(), repository=repository
+    )
+    created = service.create_session("AAPL", "2024-01-02", 100000)
+    monkeypatch.setattr(main, "training_session_service", service)
+
+    client = TestClient(main.app)
+    response = client.post(f"/api/sessions/{created['id']}/next-week")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_day_index"] == 5
+    assert payload["current_trading_date"] == "2024-01-07"
