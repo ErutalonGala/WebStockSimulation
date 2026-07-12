@@ -3,7 +3,12 @@
 This backend exposes daily stock history through FastAPI:
 
 ```bash
-uvicorn backend.main:app --reload
+# 从仓库根目录启动
+uvicorn app.main:app --reload
+
+# 或从 backend 目录启动
+cd backend
+uvicorn app.main:app --reload
 ```
 
 Endpoint:
