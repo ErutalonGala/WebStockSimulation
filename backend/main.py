@@ -1,36 +1,35 @@
-"""FastAPI entrypoint exposing stock history endpoints."""
+"""FastAPI entrypoint exposing stock history and training-session endpoints."""
 
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
+from backend.models.order import OrderSide, PriceMode
+from backend.models.position import TradingSessionState
 from backend.services.market_data import (
     DataSourceRateLimitError,
     DataSourceUnavailableError,
     InvalidSymbolError,
     MarketDataService,
 )
+from backend.services.training_session import (
+    TrainingSessionCompleteError,
+    TrainingSessionNotFoundError,
+    TrainingSessionService,
+)
 
 app = FastAPI(title="codex_rp market data API")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
 market_data_service = MarketDataService()
+training_session_service = TrainingSessionService(market_data_service=market_data_service)
 
 
-@app.get("/api/stocks/search")
-def search_stocks(query: str = Query(min_length=1, max_length=32)) -> dict[str, object]:
-    """Return a normalized exact-symbol candidate for clients with a search box."""
+class TrainingSessionCreate(BaseModel):
+    """Request body for creating a training session."""
 
-    symbol = query.strip().upper()
-    if not symbol or any(char.isspace() for char in symbol):
-        raise HTTPException(status_code=400, detail="query must be a stock symbol without spaces")
-    return {"query": query, "count": 1, "data": [{"symbol": symbol}]}
+    symbol: str = Field(min_length=1, max_length=32)
+    start_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    initial_cash: float = Field(gt=0)
 
 
 @app.get("/api/stocks/{symbol}/history")
@@ -59,3 +58,45 @@ def get_stock_history(
         "count": len(bars),
         "data": [bar.__dict__ for bar in bars],
     }
+
+
+@app.post("/api/sessions")
+def create_training_session(payload: TrainingSessionCreate) -> dict[str, object]:
+    """Create a training session starting at the next available trading day."""
+
+    try:
+        return training_session_service.create_session(
+            symbol=payload.symbol,
+            start_date=payload.start_date,
+            initial_cash=payload.initial_cash,
+        )
+    except InvalidSymbolError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DataSourceRateLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except DataSourceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/sessions/{session_id}")
+def get_training_session(session_id: str) -> dict[str, object]:
+    """Return the current state of a training session."""
+
+    try:
+        return training_session_service.get_session(session_id)
+    except TrainingSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/sessions/{session_id}/next-day")
+def advance_training_session(session_id: str) -> dict[str, object]:
+    """Advance a training session to the next valid market-data trading day."""
+
+    try:
+        return training_session_service.next_day(session_id)
+    except TrainingSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TrainingSessionCompleteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

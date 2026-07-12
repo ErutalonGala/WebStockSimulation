@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
-import csv
-import io
 import json
 import os
 from pathlib import Path
@@ -110,35 +108,9 @@ class MarketDataService:
         if cached is not None:
             return cached
 
-        bars = self._fetch_with_fallbacks(symbol)
+        bars = self._fetch_from_yahoo(symbol)
         self._write_cache(symbol, bars)
         return bars
-
-    def _fetch_with_fallbacks(self, symbol: str) -> list[DailyBar]:
-        errors: list[str] = []
-        invalid_symbol_errors: list[str] = []
-        for provider_name, fetcher in (
-            ("Yahoo Finance", self._fetch_from_yahoo),
-            ("Stooq", self._fetch_from_stooq),
-        ):
-            try:
-                return fetcher(symbol)
-            except InvalidSymbolError as exc:
-                invalid_symbol_errors.append(f"{provider_name}: {exc}")
-            except DataSourceRateLimitError:
-                errors.append(f"{provider_name}: rate limited")
-            except DataSourceUnavailableError as exc:
-                errors.append(f"{provider_name}: {exc}")
-
-        if invalid_symbol_errors and not errors:
-            raise InvalidSymbolError(
-                f"No historical daily data found for {symbol}"
-                + f" ({'; '.join(invalid_symbol_errors)})"
-            )
-        raise DataSourceUnavailableError(
-            "All market data providers are unavailable"
-            + (f" ({'; '.join(errors + invalid_symbol_errors)})" if errors or invalid_symbol_errors else "")
-        )
 
     def _fetch_from_yahoo(self, symbol: str) -> list[DailyBar]:
         encoded_symbol = quote(symbol, safe="")
@@ -165,66 +137,6 @@ class MarketDataService:
             raise DataSourceUnavailableError("Market data source returned invalid JSON") from exc
 
         return self._parse_yahoo_response(symbol, payload)
-
-    def _fetch_from_stooq(self, symbol: str) -> list[DailyBar]:
-        stooq_symbol = self._to_stooq_symbol(symbol)
-        url = f"https://stooq.com/q/d/l/?s={quote(stooq_symbol, safe='')}&i=d"
-        request = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; codex-rp-market-data/1.0)"})
-
-        try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310 - trusted HTTPS endpoint.
-                payload = response.read().decode("utf-8")
-        except HTTPError as exc:
-            if exc.code == 429:
-                raise DataSourceRateLimitError("Stooq market data source rate limit exceeded") from exc
-            raise DataSourceUnavailableError(f"Stooq returned HTTP {exc.code}") from exc
-        except (URLError, TimeoutError) as exc:
-            raise DataSourceUnavailableError("Stooq market data source is unavailable") from exc
-
-        return self._parse_stooq_response(symbol, payload)
-
-    def _parse_stooq_response(self, symbol: str, payload: str) -> list[DailyBar]:
-        if not payload.strip() or payload.strip().lower() == "no data":
-            raise InvalidSymbolError(f"No historical daily data found for {symbol}")
-
-        reader = csv.DictReader(io.StringIO(payload))
-        required_columns = {"Date", "Open", "High", "Low", "Close", "Volume"}
-        if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
-            raise InvalidSymbolError(f"No historical daily data found for {symbol}")
-
-        bars: list[DailyBar] = []
-        for row in reader:
-            try:
-                bar_date = self._parse_date(row["Date"], "Date").isoformat()
-            except ValueError:
-                continue
-            bar = DailyBar(
-                date=bar_date,
-                open=self._parse_optional_number(row.get("Open")),
-                high=self._parse_optional_number(row.get("High")),
-                low=self._parse_optional_number(row.get("Low")),
-                close=self._parse_optional_number(row.get("Close")),
-                # Stooq close prices are adjusted for splits in its historical CSV,
-                # but it does not expose a separate adjusted-close column.
-                adj_close=None,
-                volume=self._parse_optional_int(row.get("Volume")),
-                amount=None,
-            )
-            if any(value is not None for value in (bar.open, bar.high, bar.low, bar.close, bar.adj_close)):
-                bars.append(bar)
-
-        if not bars:
-            raise InvalidSymbolError(f"No valid historical daily data found for {symbol}")
-        return bars
-
-    @staticmethod
-    def _to_stooq_symbol(symbol: str) -> str:
-        lower_symbol = symbol.lower()
-        if lower_symbol.endswith(".ss") or lower_symbol.endswith(".sz"):
-            return lower_symbol[:-3] + ".cn"
-        if "." not in lower_symbol:
-            return lower_symbol + ".us"
-        return lower_symbol
 
     def _parse_yahoo_response(self, symbol: str, payload: dict[str, Any]) -> list[DailyBar]:
         chart = payload.get("chart") or {}
@@ -319,18 +231,6 @@ class MarketDataService:
     def _within_range(value: str, start: date | None, end: date | None) -> bool:
         current = datetime.strptime(value, "%Y-%m-%d").date()
         return (start is None or current >= start) and (end is None or current <= end)
-
-    @staticmethod
-    def _parse_optional_number(value: Any) -> float | None:
-        if value in (None, "", "N/A", "null"):
-            return None
-        return round(float(value), 6)
-
-    @staticmethod
-    def _parse_optional_int(value: Any) -> int | None:
-        if value in (None, "", "N/A", "null"):
-            return None
-        return int(float(value))
 
     @staticmethod
     def _get_number(values: list[Any] | None, index: int) -> float | None:
