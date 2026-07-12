@@ -143,10 +143,17 @@ export default function Simulator() {
     executeBuy(Number(buyQuantity));
   }
 
-  function buyPositionFraction(fraction: number) {
+  function setBuyPositionFraction(fraction: number) {
     if (!currentBar) return;
     const quantity = Math.floor((cash * fraction) / currentBar.close);
-    executeBuy(quantity);
+    setBuyQuantity(quantity);
+    setTradeMessage(`已填入买入数量：${quantity} 股。请点击买入确认交易。`);
+  }
+
+  function setSellPositionFraction(fraction: number) {
+    const quantity = Math.floor(positionQuantity * fraction);
+    setSellQuantity(quantity);
+    setTradeMessage(`已填入卖出数量：${quantity} 股。请点击卖出确认交易。`);
   }
 
   function sell() {
@@ -251,7 +258,8 @@ export default function Simulator() {
               onSellQuantityChange={setSellQuantity}
               onBuy={buy}
               onSell={sell}
-              onBuyPositionFraction={buyPositionFraction}
+              onBuyPositionFraction={setBuyPositionFraction}
+              onSellPositionFraction={setSellPositionFraction}
               onNextDay={nextDay}
               onNextWeek={nextWeek}
             />
