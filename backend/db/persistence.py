@@ -15,7 +15,7 @@ from backend.models.training_session import AssetSnapshot, TrainingSession
 from backend.services.market_data import DailyBar
 
 DATABASE_PATH = Path(__file__).resolve().parents[2] / "database" / "trading_trainer.db"
-SCHEMA_PATH = Path(__file__).resolve().parents[1] / "migrations" / "001_training_persistence.sql"
+MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 
 class TrainingSessionRepository:
@@ -154,11 +154,35 @@ class TrainingSessionRepository:
 
     def _initialize(self) -> None:
         with self._connect() as conn:
-            conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-            self._migrate_existing_schema(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version TEXT PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            applied_versions = {
+                row["version"]
+                for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
+            }
 
-    def _migrate_existing_schema(self, conn: sqlite3.Connection) -> None:
-        """Bring older training session tables up to the current lightweight schema."""
+            for migration_path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+                version = migration_path.stem
+                if version in applied_versions:
+                    continue
+
+                with conn:
+                    conn.executescript(migration_path.read_text(encoding="utf-8"))
+                    if migration_path.name == "002_training_sessions_symbol.sql":
+                        self._migrate_training_sessions_symbol(conn)
+                    conn.execute(
+                        "INSERT INTO schema_migrations(version) VALUES(?)",
+                        (version,),
+                    )
+
+    def _migrate_training_sessions_symbol(self, conn: sqlite3.Connection) -> None:
+        """Backfill columns missing from legacy training session tables."""
 
         training_session_columns = {
             row["name"]
