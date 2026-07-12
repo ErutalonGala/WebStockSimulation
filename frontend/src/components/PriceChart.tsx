@@ -24,34 +24,40 @@ const calculateMovingAverage = (bars: Array<PriceBar & { close: number }>, windo
 }, []);
 
 export default function PriceChart({ bars, currentDate }: PriceChartProps) {
+  const [showClosePrice, setShowClosePrice] = useState(true);
   const [showMa5, setShowMa5] = useState(true);
   const [showMa10, setShowMa10] = useState(true);
   const [showMa30, setShowMa30] = useState(true);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   const currentBarIndex = bars.findIndex((bar) => bar.date === currentDate);
-  const visibleBars = bars
+  const availableBars = bars
     .slice(0, currentBarIndex >= 0 ? currentBarIndex + 1 : bars.length)
     .filter((bar): bar is PriceBar & { close: number } => typeof bar.close === 'number');
-  if (visibleBars.length === 0) {
+  if (availableBars.length === 0) {
     return <p className="muted">暂无可绘制行情数据。</p>;
   }
 
+  const visibleCount = Math.max(2, Math.ceil(availableBars.length / zoomLevel));
+  const visibleBars = availableBars.slice(-visibleCount);
+  const visibleOffset = availableBars.length - visibleBars.length;
   const width = 760;
-  const height = 260;
-  const padding = 32;
-  const ma5 = calculateMovingAverage(visibleBars, 5);
-  const ma10 = calculateMovingAverage(visibleBars, 10);
-  const ma30 = calculateMovingAverage(visibleBars, 30);
+  const height = 320;
+  const padding = 36;
+  const ma5 = calculateMovingAverage(availableBars, 5).filter((point) => point.index >= visibleOffset);
+  const ma10 = calculateMovingAverage(availableBars, 10).filter((point) => point.index >= visibleOffset);
+  const ma30 = calculateMovingAverage(availableBars, 30).filter((point) => point.index >= visibleOffset);
   const enabledMovingAverageValues = [
     ...(showMa5 ? ma5.map((point) => point.value) : []),
     ...(showMa10 ? ma10.map((point) => point.value) : []),
     ...(showMa30 ? ma30.map((point) => point.value) : []),
   ];
   const prices = visibleBars.map((bar) => bar.close);
-  const yValues = [...prices, ...enabledMovingAverageValues];
-  const min = Math.min(...yValues);
-  const max = Math.max(...yValues);
+  const yValues = [...(showClosePrice ? prices : []), ...enabledMovingAverageValues];
+  const safeYValues = yValues.length > 0 ? yValues : prices;
+  const min = Math.min(...safeYValues);
+  const max = Math.max(...safeYValues);
   const span = max - min || 1;
   const getX = (index: number) => (visibleBars.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (visibleBars.length - 1));
   const getY = (value: number) => height - padding - ((value - min) * (height - padding * 2)) / span;
@@ -60,7 +66,7 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
   const mapMovingAveragePoints = (averages: Array<{ date: string; value: number; index: number }>): MovingAveragePoint[] => averages.map((point) => ({
     date: point.date,
     value: point.value,
-    x: getX(point.index),
+    x: getX(point.index - visibleOffset),
     y: getY(point.value),
   }));
   const ma5Path = buildPath(mapMovingAveragePoints(ma5));
@@ -73,31 +79,50 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
 
   return (
     <div className="price-chart">
-      <div className="ma-controls" aria-label="移动均线显示设置">
-        <label>
-          <input type="checkbox" checked={showMa5} onChange={(event) => setShowMa5(event.target.checked)} />
-          5日均线
-        </label>
-        <label>
-          <input type="checkbox" checked={showMa10} onChange={(event) => setShowMa10(event.target.checked)} />
-          10日均线
-        </label>
-        <label>
-          <input type="checkbox" checked={showMa30} onChange={(event) => setShowMa30(event.target.checked)} />
-          30日均线
+      <div className="chart-toolbar" aria-label="股价图表设置">
+        <div className="ma-controls" aria-label="行情曲线显示设置">
+          <label>
+            <input type="checkbox" checked={showClosePrice} onChange={(event) => setShowClosePrice(event.target.checked)} />
+            当前股价
+          </label>
+          <label>
+            <input type="checkbox" checked={showMa5} onChange={(event) => setShowMa5(event.target.checked)} />
+            5日均线
+          </label>
+          <label>
+            <input type="checkbox" checked={showMa10} onChange={(event) => setShowMa10(event.target.checked)} />
+            10日均线
+          </label>
+          <label>
+            <input type="checkbox" checked={showMa30} onChange={(event) => setShowMa30(event.target.checked)} />
+            30日均线
+          </label>
+        </div>
+        <label className="zoom-control">
+          缩放
+          <input
+            type="range"
+            min="1"
+            max="6"
+            step="0.5"
+            value={zoomLevel}
+            onChange={(event) => setZoomLevel(Number(event.target.value))}
+            aria-label="股价曲线缩放"
+          />
+          <span>{zoomLevel.toFixed(1)}x</span>
         </label>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价与移动均线折线图">
-        <path className="chart-line" d={path} />
+        {showClosePrice && <path className="chart-line" d={path} />}
         {showMa5 && ma5Path && <path className="ma-line ma5" d={ma5Path} />}
         {showMa10 && ma10Path && <path className="ma-line ma10" d={ma10Path} />}
         {showMa30 && ma30Path && <path className="ma-line ma30" d={ma30Path} />}
-        {points.map((point) => (
+        {showClosePrice && points.map((point) => (
           <circle
             key={point.date}
             cx={point.x}
             cy={point.y}
-            r="4"
+            r="2.5"
             tabIndex={0}
             aria-label={`${point.date} 收盘价 ${priceFormatter.format(point.close)}`}
             onMouseEnter={() => setHoveredPoint(point)}
@@ -108,7 +133,7 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
             <title>{`${point.date} 收盘价 ${priceFormatter.format(point.close)}`}</title>
           </circle>
         ))}
-        {hoveredPoint && (
+        {showClosePrice && hoveredPoint && (
           <g className="chart-tooltip" pointerEvents="none">
             <line className="chart-hover-line" x1={hoveredPoint.x} x2={hoveredPoint.x} y1={padding} y2={height - padding} />
             <rect className="chart-tooltip-bg" x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx="8" />
