@@ -42,9 +42,9 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
   const visibleCount = Math.max(2, Math.ceil(availableBars.length / zoomLevel));
   const visibleBars = availableBars.slice(-visibleCount);
   const visibleOffset = availableBars.length - visibleBars.length;
-  const width = 760;
-  const height = 320;
-  const padding = 36;
+  const width = 1120;
+  const height = 520;
+  const padding = 48;
   const ma5 = calculateMovingAverage(availableBars, 5).filter((point) => point.index >= visibleOffset);
   const ma10 = calculateMovingAverage(availableBars, 10).filter((point) => point.index >= visibleOffset);
   const ma30 = calculateMovingAverage(availableBars, 30).filter((point) => point.index >= visibleOffset);
@@ -72,8 +72,8 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
   const ma5Path = buildPath(mapMovingAveragePoints(ma5));
   const ma10Path = buildPath(mapMovingAveragePoints(ma10));
   const ma30Path = buildPath(mapMovingAveragePoints(ma30));
-  const tooltipWidth = 132;
-  const tooltipHeight = 54;
+  const tooltipWidth = 148;
+  const tooltipHeight = 58;
   const tooltipX = hoveredPoint ? Math.min(hoveredPoint.x + 12, width - padding - tooltipWidth) : 0;
   const tooltipY = hoveredPoint ? Math.max(padding / 2, hoveredPoint.y - tooltipHeight - 12) : 0;
 
