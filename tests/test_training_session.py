@@ -118,6 +118,48 @@ def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
     assert saved[0] == "AAPL"
     assert json.loads(saved[1])["AAPL"]["symbol"] == "AAPL"
 
+def test_repository_rebuilds_legacy_integer_session_ids(tmp_path):
+    database_path = tmp_path / "legacy_integer_id.db"
+    with sqlite3.connect(database_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE training_sessions (
+                id INTEGER PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                initial_cash REAL NOT NULL,
+                current_day_index INTEGER NOT NULL DEFAULT 0,
+                current_cash REAL NOT NULL,
+                current_position_quantity INTEGER NOT NULL DEFAULT 0,
+                current_position_cost REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+    repository = TrainingSessionRepository(database_path)
+    session = TrainingSession(
+        symbol="AAPL",
+        start_date="2024-01-06",
+        initial_cash=100000,
+        market_data=[
+            DailyBar(date="2024-01-08", open=100, high=110, low=99, close=105, adj_close=105, volume=1000),
+        ],
+    )
+
+    repository.save_session(session)
+
+    with sqlite3.connect(database_path) as conn:
+        id_column = next(
+            row for row in conn.execute("PRAGMA table_info(training_sessions)") if row[1] == "id"
+        )
+        saved = conn.execute(
+            "SELECT id, symbol FROM training_sessions WHERE id = ?",
+            (session.id,),
+        ).fetchone()
+
+    assert id_column[2].upper() == "TEXT"
+    assert saved == (session.id, "AAPL")
+
 
 def _migration_versions(database_path):
     with sqlite3.connect(database_path) as conn:
