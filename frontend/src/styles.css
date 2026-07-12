@@ -68,6 +68,15 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .secondary-button { background: #0f172a; }
 .button-row { display: flex; gap: 0.75rem; }
 .button-row button { flex: 1; }
+.quick-position-group {
+  display: grid;
+  gap: 0.5rem;
+}
+.quick-position-group span {
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
 .success { color: #16a34a; font-weight: 700; }
 .warning { color: #d97706; font-weight: 700; }
 .price-chart { display: grid; gap: 0.5rem; margin-top: 1rem; }
