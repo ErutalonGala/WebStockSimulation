@@ -174,20 +174,27 @@ class TrainingSessionRepository:
 
                 with conn:
                     conn.executescript(migration_path.read_text(encoding="utf-8"))
-                    if migration_path.name == "002_training_sessions_symbol.sql":
-                        self._migrate_training_sessions_symbol(conn)
                     conn.execute(
                         "INSERT INTO schema_migrations(version) VALUES(?)",
                         (version,),
                     )
 
-    def _migrate_training_sessions_symbol(self, conn: sqlite3.Connection) -> None:
-        """Backfill columns missing from legacy training session tables."""
+            with conn:
+                self._migrate_training_sessions_schema(conn)
 
-        training_session_columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(training_sessions)").fetchall()
-        }
+    def _migrate_training_sessions_schema(self, conn: sqlite3.Connection) -> None:
+        """Normalize legacy training session tables to the current schema."""
+
+        table_info = conn.execute("PRAGMA table_info(training_sessions)").fetchall()
+        if not table_info:
+            return
+
+        columns = {row["name"]: row for row in table_info}
+        id_column = columns.get("id")
+        if id_column is None or str(id_column["type"]).upper() != "TEXT":
+            self._rebuild_training_sessions_table(conn, columns)
+            return
+
         expected_columns = {
             "symbol": "TEXT",
             "start_date": "TEXT",
@@ -201,10 +208,108 @@ class TrainingSessionRepository:
         }
 
         for column_name, column_definition in expected_columns.items():
-            if column_name not in training_session_columns:
+            if column_name not in columns:
                 conn.execute(
                     f"ALTER TABLE training_sessions ADD COLUMN {column_name} {column_definition}"
                 )
+
+    def _rebuild_training_sessions_table(
+        self, conn: sqlite3.Connection, columns: dict[str, sqlite3.Row]
+    ) -> None:
+        """Recreate legacy tables whose primary-key type cannot be altered."""
+
+        conn.execute("ALTER TABLE training_sessions RENAME TO training_sessions_legacy")
+        conn.execute(
+            """
+            CREATE TABLE training_sessions (
+              id TEXT PRIMARY KEY,
+              symbol TEXT,
+              start_date TEXT NOT NULL,
+              initial_cash REAL NOT NULL,
+              current_day_index INTEGER NOT NULL DEFAULT 0,
+              current_cash REAL NOT NULL,
+              current_position_quantity INTEGER NOT NULL DEFAULT 0,
+              current_position_cost REAL NOT NULL DEFAULT 0,
+              current_positions TEXT NOT NULL DEFAULT '{}',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        def legacy_expr(column_name: str, fallback: str) -> str:
+            if column_name in columns:
+                return column_name
+            return fallback
+
+        conn.execute(
+            f"""
+            INSERT INTO training_sessions(
+                id, symbol, start_date, initial_cash, current_day_index, current_cash,
+                current_position_quantity, current_position_cost, current_positions, created_at
+            )
+            SELECT
+                CAST(id AS TEXT),
+                {legacy_expr('symbol', "''")},
+                {legacy_expr('start_date', "'1970-01-01'")},
+                {legacy_expr('initial_cash', '0')},
+                {legacy_expr('current_day_index', '0')},
+                {legacy_expr('current_cash', legacy_expr('initial_cash', '0'))},
+                {legacy_expr('current_position_quantity', '0')},
+                {legacy_expr('current_position_cost', '0')},
+                {legacy_expr('current_positions', "'{}'")},
+                {legacy_expr('created_at', 'CURRENT_TIMESTAMP')}
+            FROM training_sessions_legacy
+            """
+        )
+        conn.execute("DROP TABLE training_sessions_legacy")
+        self._recreate_training_session_dependents(conn)
+
+    def _recreate_training_session_dependents(self, conn: sqlite3.Connection) -> None:
+        """Recreate dependent tables whose foreign keys may point to legacy names."""
+
+        conn.execute("DROP TABLE IF EXISTS orders")
+        conn.execute("DROP TABLE IF EXISTS portfolio_snapshots")
+        conn.executescript(
+            """
+            CREATE TABLE orders (
+              id INTEGER NOT NULL,
+              session_id TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+              symbol TEXT NOT NULL,
+              date TEXT NOT NULL,
+              side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+              price REAL NOT NULL,
+              quantity INTEGER NOT NULL CHECK (quantity > 0),
+              fee REAL NOT NULL DEFAULT 0,
+              stamp_tax REAL NOT NULL DEFAULT 0,
+              slippage REAL NOT NULL DEFAULT 0,
+              realized_pnl REAL NOT NULL DEFAULT 0,
+              cash_after REAL NOT NULL,
+              position_quantity_after INTEGER NOT NULL,
+              position_cost_after REAL NOT NULL,
+              price_mode TEXT NOT NULL DEFAULT 'custom',
+              executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY(id, session_id)
+            );
+
+            CREATE TABLE portfolio_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              session_id TEXT NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+              date TEXT NOT NULL,
+              cash REAL NOT NULL,
+              position_quantity INTEGER NOT NULL,
+              position_cost REAL NOT NULL,
+              close_price REAL NOT NULL,
+              market_value REAL NOT NULL,
+              total_assets REAL NOT NULL,
+              floating_pnl REAL NOT NULL DEFAULT 0,
+              floating_pnl_ratio REAL NOT NULL DEFAULT 0,
+              daily_pnl REAL NOT NULL DEFAULT 0,
+              cumulative_return REAL NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(session_id, date)
+            );
+            """
+        )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path)
