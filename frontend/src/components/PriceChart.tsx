@@ -83,19 +83,19 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
         <div className="ma-controls" aria-label="行情曲线显示设置">
           <label>
             <input type="checkbox" checked={showClosePrice} onChange={(event) => setShowClosePrice(event.target.checked)} />
-            当前股价
+            <span className="legend-text legend-current">当前股价</span>
           </label>
           <label>
             <input type="checkbox" checked={showMa5} onChange={(event) => setShowMa5(event.target.checked)} />
-            5日均线
+            <span className="legend-text legend-ma5">5日均线</span>
           </label>
           <label>
             <input type="checkbox" checked={showMa10} onChange={(event) => setShowMa10(event.target.checked)} />
-            10日均线
+            <span className="legend-text legend-ma10">10日均线</span>
           </label>
           <label>
             <input type="checkbox" checked={showMa30} onChange={(event) => setShowMa30(event.target.checked)} />
-            30日均线
+            <span className="legend-text legend-ma30">30日均线</span>
           </label>
         </div>
         <label className="zoom-control">
