@@ -56,3 +56,10 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .market-card { margin-top: 1.5rem; }
 .market-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 780px) { .market-metrics, .metrics { grid-template-columns: 1fr; } }
+.positive { color: #16a34a; }
+.negative { color: #dc2626; }
+.equity-curve { display: grid; gap: 0.5rem; }
+.equity-curve svg { width: 100%; height: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; }
+.equity-line { fill: none; stroke: #2563eb; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.equity-curve circle { fill: #2563eb; }
+.curve-caption { display: flex; justify-content: space-between; color: #64748b; font-size: 0.9rem; }
