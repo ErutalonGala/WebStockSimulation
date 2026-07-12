@@ -143,15 +143,10 @@ export default function Simulator() {
     executeBuy(Number(buyQuantity));
   }
 
-  function selectBuyPositionFraction(fraction: number) {
+  function buyPositionFraction(fraction: number) {
     if (!currentBar) return;
     const quantity = Math.floor((cash * fraction) / currentBar.close);
-    setBuyQuantity(quantity);
-  }
-
-  function selectSellPositionFraction(fraction: number) {
-    const quantity = Math.floor(positionQuantity * fraction);
-    setSellQuantity(quantity);
+    executeBuy(quantity);
   }
 
   function sell() {
@@ -256,8 +251,7 @@ export default function Simulator() {
               onSellQuantityChange={setSellQuantity}
               onBuy={buy}
               onSell={sell}
-              onBuyPositionFractionSelect={selectBuyPositionFraction}
-              onSellPositionFractionSelect={selectSellPositionFraction}
+              onBuyPositionFraction={buyPositionFraction}
               onNextDay={nextDay}
               onNextWeek={nextWeek}
             />

@@ -10,8 +10,7 @@ type OrderPanelProps = {
   onSellQuantityChange: (value: string) => void;
   onBuy: () => void;
   onSell: () => void;
-  onBuyPositionFractionSelect: (fraction: number) => void;
-  onSellPositionFractionSelect: (fraction: number) => void;
+  onBuyPositionFraction: (fraction: number) => void;
   onNextDay: () => void;
   onNextWeek: () => void;
 };
@@ -26,8 +25,7 @@ export default function OrderPanel({
   onSellQuantityChange,
   onBuy,
   onSell,
-  onBuyPositionFractionSelect,
-  onSellPositionFractionSelect,
+  onBuyPositionFraction,
   onNextDay,
   onNextWeek,
 }: OrderPanelProps) {
@@ -60,27 +58,13 @@ export default function OrderPanel({
       <div className="quick-position-group" aria-label="快速买入仓位">
         <span>快速买入仓位</span>
         <div className="button-row">
-          <button type="button" className="secondary-button" onClick={() => onBuyPositionFractionSelect(1 / 4)} disabled={disabled || loading}>
+          <button type="button" className="secondary-button" onClick={() => onBuyPositionFraction(1 / 4)} disabled={disabled || loading}>
             1/4 仓
           </button>
-          <button type="button" className="secondary-button" onClick={() => onBuyPositionFractionSelect(1 / 3)} disabled={disabled || loading}>
+          <button type="button" className="secondary-button" onClick={() => onBuyPositionFraction(1 / 3)} disabled={disabled || loading}>
             1/3 仓
           </button>
-          <button type="button" className="secondary-button" onClick={() => onBuyPositionFractionSelect(2 / 3)} disabled={disabled || loading}>
-            2/3 仓
-          </button>
-        </div>
-      </div>
-      <div className="quick-position-group" aria-label="快速卖出仓位">
-        <span>快速卖出仓位</span>
-        <div className="button-row">
-          <button type="button" className="secondary-button" onClick={() => onSellPositionFractionSelect(1 / 4)} disabled={disabled || loading}>
-            1/4 仓
-          </button>
-          <button type="button" className="secondary-button" onClick={() => onSellPositionFractionSelect(1 / 3)} disabled={disabled || loading}>
-            1/3 仓
-          </button>
-          <button type="button" className="secondary-button" onClick={() => onSellPositionFractionSelect(2 / 3)} disabled={disabled || loading}>
+          <button type="button" className="secondary-button" onClick={() => onBuyPositionFraction(2 / 3)} disabled={disabled || loading}>
             2/3 仓
           </button>
         </div>
