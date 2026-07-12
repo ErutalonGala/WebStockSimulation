@@ -203,76 +203,80 @@ export default function Simulator() {
         </div>
       </section>
 
-      <section className="grid simulator-grid">
-        <article className="card">
-          <h2>训练初始化</h2>
-          <StockSearch
-            symbol={symbol}
-            startDate={startDate}
-            initialCash={initialCash}
-            loading={loading}
-            onSymbolChange={setSymbol}
-            onStartDateChange={setStartDate}
-            onInitialCashChange={setInitialCash}
-            onSubmit={startTraining}
-          />
-          {errorMessage && <p className="error">{errorMessage}</p>}
-          {dataMessage && <p className="warning">{dataMessage}</p>}
-        </article>
-
-        <article className="card">
-          <h2>交易区域</h2>
-          <OrderPanel
-            buyQuantity={buyQuantity}
-            sellQuantity={sellQuantity}
-            loading={loading}
-            disabled={controlsDisabled}
-            isComplete={Boolean(session?.is_complete)}
-            onBuyQuantityChange={setBuyQuantity}
-            onSellQuantityChange={setSellQuantity}
-            onBuy={buy}
-            onSell={sell}
-            onNextDay={nextDay}
-            onNextWeek={nextWeek}
-          />
-          {tradeMessage && <p className={tradeMessage.startsWith('交易失败') ? 'error' : 'success'}>{tradeMessage}</p>}
-        </article>
+      <section className="card setup-card">
+        <h2>训练初始化</h2>
+        <StockSearch
+          symbol={symbol}
+          startDate={startDate}
+          initialCash={initialCash}
+          loading={loading}
+          onSymbolChange={setSymbol}
+          onStartDateChange={setStartDate}
+          onInitialCashChange={setInitialCash}
+          onSubmit={startTraining}
+        />
+        {errorMessage && <p className="error">{errorMessage}</p>}
+        {dataMessage && <p className="warning">{dataMessage}</p>}
       </section>
 
-      <section className="card market-card">
-        <h2>行情展示</h2>
-        {currentBar ? (
-          <>
-            <dl className="metrics market-metrics">
-              <div><dt>当前日期</dt><dd>{currentBar.date}</dd></div>
-              <div><dt>开盘价</dt><dd>{money(currentBar.open)}</dd></div>
-              <div><dt>最高价</dt><dd>{money(currentBar.high)}</dd></div>
-              <div><dt>最低价</dt><dd>{money(currentBar.low)}</dd></div>
-              <div><dt>收盘价</dt><dd>{money(currentBar.close)}</dd></div>
-              <div><dt>成交量</dt><dd>{numberText(currentBar.volume)}</dd></div>
-            </dl>
+      <section className="simulator-workspace" aria-label="模拟交易工作区">
+        <article className="card chart-card">
+          <h2>股价曲线</h2>
+          {currentBar ? (
             <PriceChart bars={chartBars} currentDate={session.current_trading_date} />
-          </>
-        ) : (
-          <p className="muted">训练尚未开始，暂无行情数据。</p>
-        )}
-      </section>
+          ) : (
+            <p className="muted">训练尚未开始，暂无行情数据。</p>
+          )}
+        </article>
 
-      <section className="card market-card">
-        <h2>账户展示</h2>
-        {session ? (
-          <PortfolioSummary
-            cash={cash}
-            positionQuantity={positionQuantity}
-            positionCost={positionCost}
-            marketValue={marketValue}
-            floatingPnl={floatingPnl}
-            dailyPnl={dailyPnl}
-            totalAssets={totalAssets}
-          />
-        ) : (
-          <p className="muted">训练尚未开始，请先创建训练会话。</p>
-        )}
+        <aside className="side-panel">
+          <article className="card trade-card">
+            <h2>买入 / 卖出</h2>
+            <OrderPanel
+              buyQuantity={buyQuantity}
+              sellQuantity={sellQuantity}
+              loading={loading}
+              disabled={controlsDisabled}
+              isComplete={Boolean(session?.is_complete)}
+              onBuyQuantityChange={setBuyQuantity}
+              onSellQuantityChange={setSellQuantity}
+              onBuy={buy}
+              onSell={sell}
+              onNextDay={nextDay}
+              onNextWeek={nextWeek}
+            />
+            {tradeMessage && <p className={tradeMessage.startsWith('交易失败') ? 'error' : 'success'}>{tradeMessage}</p>}
+          </article>
+
+          <article className="card data-card">
+            <h2>账户与行情数据</h2>
+            {currentBar ? (
+              <dl className="metrics market-metrics">
+                <div><dt>当前日期</dt><dd>{currentBar.date}</dd></div>
+                <div><dt>开盘价</dt><dd>{money(currentBar.open)}</dd></div>
+                <div><dt>最高价</dt><dd>{money(currentBar.high)}</dd></div>
+                <div><dt>最低价</dt><dd>{money(currentBar.low)}</dd></div>
+                <div><dt>收盘价</dt><dd>{money(currentBar.close)}</dd></div>
+                <div><dt>成交量</dt><dd>{numberText(currentBar.volume)}</dd></div>
+              </dl>
+            ) : (
+              <p className="muted">训练尚未开始，暂无行情数据。</p>
+            )}
+            {session ? (
+              <PortfolioSummary
+                cash={cash}
+                positionQuantity={positionQuantity}
+                positionCost={positionCost}
+                marketValue={marketValue}
+                floatingPnl={floatingPnl}
+                dailyPnl={dailyPnl}
+                totalAssets={totalAssets}
+              />
+            ) : (
+              <p className="muted">训练尚未开始，请先创建训练会话。</p>
+            )}
+          </article>
+        </aside>
       </section>
     </main>
   );
