@@ -121,9 +121,8 @@ export default function Simulator() {
     }
   }
 
-  function buy() {
+  function executeBuy(quantity: number) {
     if (!currentBar) return;
-    const quantity = Number(buyQuantity);
     const cost = quantity * currentBar.close;
     if (!Number.isInteger(quantity) || quantity <= 0) {
       setTradeMessage('交易失败：买入数量必须为正整数。');
@@ -138,6 +137,16 @@ export default function Simulator() {
     setPositionQuantity(newQuantity);
     setCash(cash - cost);
     setTradeMessage(`买入成功：以收盘价 ${money(currentBar.close)} 买入 ${quantity} 股。`);
+  }
+
+  function buy() {
+    executeBuy(Number(buyQuantity));
+  }
+
+  function buyPositionFraction(fraction: number) {
+    if (!currentBar) return;
+    const quantity = Math.floor((cash * fraction) / currentBar.close);
+    executeBuy(quantity);
   }
 
   function sell() {
@@ -242,6 +251,7 @@ export default function Simulator() {
               onSellQuantityChange={setSellQuantity}
               onBuy={buy}
               onSell={sell}
+              onBuyPositionFraction={buyPositionFraction}
               onNextDay={nextDay}
               onNextWeek={nextWeek}
             />
