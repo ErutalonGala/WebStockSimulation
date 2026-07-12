@@ -39,9 +39,10 @@ async function request(path: string, options: RequestInit = {}) {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, options);
-  } catch (error) {
+  } catch {
     throw new Error(`无法连接后端服务，请确认 API 地址 ${API_BASE_URL} 可访问，并检查 CORS/端口配置。`);
   }
+
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.detail || '请求失败，请稍后重试。');

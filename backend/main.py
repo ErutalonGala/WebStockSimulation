@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -22,12 +24,19 @@ from backend.services.training_session import (
 )
 
 app = FastAPI(title="codex_rp market data API")
+
+def _get_cors_allow_origins() -> list[str]:
+    """Return configured CORS origins, defaulting to local Vite dev servers."""
+
+    configured_origins = os.getenv("CORS_ALLOW_ORIGINS")
+    if configured_origins:
+        return [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_get_cors_allow_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
