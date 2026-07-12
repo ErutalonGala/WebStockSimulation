@@ -64,6 +64,15 @@ class TrainingSessionService:
         self.repository.save_session(session)
         return self.serialize(session)
 
+    def next_week(self, session_id: str) -> dict[str, object]:
+        session = self._get_session(session_id)
+        if session.current_day_index >= len(session.market_data) - 1:
+            raise TrainingSessionCompleteError("训练会话已经到达最后一个有效交易日")
+        session.current_day_index = min(session.current_day_index + 5, len(session.market_data) - 1)
+        self.performance_service.capture_snapshot(session)
+        self.repository.save_session(session)
+        return self.serialize(session)
+
     def list_sessions(self) -> list[dict[str, object]]:
         """Return historical training sessions stored in the database."""
 

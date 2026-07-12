@@ -165,6 +165,18 @@ def advance_training_session(session_id: str) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/sessions/{session_id}/next-week")
+def advance_training_session_week(session_id: str) -> dict[str, object]:
+    """Advance a training session by up to five valid market-data trading days."""
+
+    try:
+        return training_session_service.next_week(session_id)
+    except TrainingSessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TrainingSessionCompleteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/sessions/{session_id}")
 def create_demo_order_session(session_id: str, payload: DemoSessionCreate) -> dict[str, object]:
     """Create a simple account session for order execution practice."""

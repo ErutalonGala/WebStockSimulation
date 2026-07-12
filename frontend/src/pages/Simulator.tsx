@@ -173,6 +173,21 @@ export default function Simulator() {
     }
   }
 
+  async function nextWeek() {
+    if (!session) return;
+    setLoading(true);
+    setErrorMessage('');
+    setTradeMessage('');
+    setPreviousTotalAssets(totalAssets);
+    try {
+      setSession(await request(`/api/sessions/${session.id}/next-week`, { method: 'POST' }));
+    } catch (error) {
+      setErrorMessage(`训练结束：${(error as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -218,6 +233,7 @@ export default function Simulator() {
             onBuy={buy}
             onSell={sell}
             onNextDay={nextDay}
+            onNextWeek={nextWeek}
           />
           {tradeMessage && <p className={tradeMessage.startsWith('交易失败') ? 'error' : 'success'}>{tradeMessage}</p>}
         </article>
