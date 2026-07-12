@@ -155,6 +155,32 @@ class TrainingSessionRepository:
     def _initialize(self) -> None:
         with self._connect() as conn:
             conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+            self._migrate_existing_schema(conn)
+
+    def _migrate_existing_schema(self, conn: sqlite3.Connection) -> None:
+        """Bring older training session tables up to the current lightweight schema."""
+
+        training_session_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(training_sessions)").fetchall()
+        }
+        expected_columns = {
+            "symbol": "TEXT",
+            "start_date": "TEXT",
+            "initial_cash": "REAL NOT NULL DEFAULT 0",
+            "current_day_index": "INTEGER NOT NULL DEFAULT 0",
+            "current_cash": "REAL NOT NULL DEFAULT 0",
+            "current_position_quantity": "INTEGER NOT NULL DEFAULT 0",
+            "current_position_cost": "REAL NOT NULL DEFAULT 0",
+            "current_positions": "TEXT NOT NULL DEFAULT '{}'",
+            "created_at": "TEXT",
+        }
+
+        for column_name, column_definition in expected_columns.items():
+            if column_name not in training_session_columns:
+                conn.execute(
+                    f"ALTER TABLE training_sessions ADD COLUMN {column_name} {column_definition}"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path)

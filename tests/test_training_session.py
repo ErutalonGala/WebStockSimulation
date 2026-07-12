@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+
 import pytest
 
+from backend.db.persistence import TrainingSessionRepository
+from backend.models.training_session import TrainingSession
 from backend.services.market_data import DailyBar
 from backend.services.training_session import TrainingSessionCompleteError, TrainingSessionService
 
@@ -69,3 +74,46 @@ def test_performance_metrics_and_snapshots_use_current_close():
     assert advanced["daily_pnl"] == 600
     assert advanced["cumulative_return"] == 0.006
     assert advanced["daily_snapshots"][-1]["cumulative_return"] == 0.006
+
+
+def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
+    database_path = tmp_path / "legacy.db"
+    with sqlite3.connect(database_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE training_sessions (
+                id TEXT PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                initial_cash REAL NOT NULL,
+                current_day_index INTEGER NOT NULL DEFAULT 0,
+                current_cash REAL NOT NULL,
+                current_position_quantity INTEGER NOT NULL DEFAULT 0,
+                current_position_cost REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+    repository = TrainingSessionRepository(database_path)
+    session = TrainingSession(
+        symbol="AAPL",
+        start_date="2024-01-06",
+        initial_cash=100000,
+        market_data=[
+            DailyBar(date="2024-01-08", open=100, high=110, low=99, close=105, adj_close=105, volume=1000),
+        ],
+    )
+
+    repository.save_session(session)
+
+    with sqlite3.connect(database_path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(training_sessions)")}
+        saved = conn.execute(
+            "SELECT symbol, current_positions FROM training_sessions WHERE id = ?",
+            (session.id,),
+        ).fetchone()
+
+    assert "symbol" in columns
+    assert "current_positions" in columns
+    assert saved[0] == "AAPL"
+    assert json.loads(saved[1])["AAPL"]["symbol"] == "AAPL"
