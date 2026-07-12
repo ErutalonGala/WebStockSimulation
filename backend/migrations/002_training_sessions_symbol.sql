@@ -1,0 +1,4 @@
+-- Compatibility migration for legacy training_sessions tables.
+-- The repository applies the column additions in Python after inspecting
+-- PRAGMA table_info(training_sessions), because SQLite cannot conditionally
+-- add columns in portable SQL and rejects duplicate ADD COLUMN statements.

@@ -117,3 +117,76 @@ def test_repository_migrates_legacy_training_sessions_without_symbol(tmp_path):
     assert "current_positions" in columns
     assert saved[0] == "AAPL"
     assert json.loads(saved[1])["AAPL"]["symbol"] == "AAPL"
+
+
+def _migration_versions(database_path):
+    with sqlite3.connect(database_path) as conn:
+        return [
+            row[0]
+            for row in conn.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+
+
+def test_repository_initializes_empty_database_with_migration_versions(tmp_path):
+    database_path = tmp_path / "empty.db"
+
+    TrainingSessionRepository(database_path)
+
+    with sqlite3.connect(database_path) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        training_session_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(training_sessions)")
+        }
+
+    assert "schema_migrations" in tables
+    assert "training_sessions" in tables
+    assert "symbol" in training_session_columns
+    assert _migration_versions(database_path) == [
+        "001_training_persistence",
+        "002_training_sessions_symbol",
+    ]
+
+
+def test_repository_skips_previously_applied_001_migration(tmp_path):
+    database_path = tmp_path / "applied_001.db"
+    with sqlite3.connect(database_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE schema_migrations (
+                version TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO schema_migrations(version) VALUES('001_training_persistence');
+            CREATE TABLE training_sessions (
+                id TEXT PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                initial_cash REAL NOT NULL,
+                current_day_index INTEGER NOT NULL DEFAULT 0,
+                current_cash REAL NOT NULL,
+                current_position_quantity INTEGER NOT NULL DEFAULT 0,
+                current_position_cost REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+
+    TrainingSessionRepository(database_path)
+
+    with sqlite3.connect(database_path) as conn:
+        training_session_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(training_sessions)")
+        }
+
+    assert "symbol" in training_session_columns
+    assert "current_positions" in training_session_columns
+    assert _migration_versions(database_path) == [
+        "001_training_persistence",
+        "002_training_sessions_symbol",
+    ]
