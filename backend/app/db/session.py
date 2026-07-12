@@ -1,22 +1,17 @@
-from pathlib import Path
+"""Compatibility placeholders for the deprecated SQLAlchemy scaffold.
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+Persistent storage is implemented with SQLite in :mod:`backend.db.persistence`.
+This module intentionally avoids importing SQLAlchemy so package imports remain
+lightweight in environments that only use the current API.
+"""
 
-DATABASE_PATH = Path(__file__).resolve().parents[3] / "database" / "trading_trainer.db"
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
-
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from backend.db.persistence import DATABASE_PATH, TrainingSessionRepository
 
 
-class Base(DeclarativeBase):
-    pass
+def get_repository() -> TrainingSessionRepository:
+    """Return the SQLite repository used by the current backend."""
+
+    return TrainingSessionRepository(DATABASE_PATH)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["DATABASE_PATH", "TrainingSessionRepository", "get_repository"]
