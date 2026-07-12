@@ -32,6 +32,10 @@ class AssetSnapshot:
     close_price: float
     market_value: float
     total_assets: float
+    floating_pnl: float = 0.0
+    floating_pnl_ratio: float = 0.0
+    daily_pnl: float = 0.0
+    cumulative_return: float = 0.0
 
 
 @dataclass
@@ -59,18 +63,3 @@ class TrainingSession:
     def current_bar(self) -> DailyBar:
         return self.market_data[self.current_day_index]
 
-    def capture_snapshot(self) -> AssetSnapshot:
-        close_price = self.current_bar.close or self.current_bar.adj_close or 0.0
-        market_value = round(self.current_position_quantity * close_price, 2)
-        total_assets = round(self.current_cash + market_value, 2)
-        snapshot = AssetSnapshot(
-            date=self.current_bar.date,
-            cash=round(self.current_cash, 2),
-            position_quantity=self.current_position_quantity,
-            position_cost=round(self.current_position_cost, 6),
-            close_price=round(close_price, 6),
-            market_value=market_value,
-            total_assets=total_assets,
-        )
-        self.daily_snapshots.append(snapshot)
-        return snapshot

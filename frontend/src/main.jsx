@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import PortfolioSummary from '../components/PortfolioSummary';
+import EquityCurve from '../components/EquityCurve';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -95,22 +97,13 @@ function App() {
 
         <article className="card">
           <h2>会话资产</h2>
-          {session ? (
-            <>
-              <dl className="metrics">
-                <div><dt>现金</dt><dd>{money(session.current_cash)}</dd></div>
-                <div><dt>持仓数量</dt><dd>{session.current_position_quantity}</dd></div>
-                <div><dt>持仓成本</dt><dd>{money(session.current_position_cost)}</dd></div>
-                <div><dt>持仓市值</dt><dd>{money(session.market_value)}</dd></div>
-                <div><dt>总资产</dt><dd>{money(session.total_assets)}</dd></div>
-              </dl>
-              <button onClick={nextDay} disabled={loading || session.is_complete}>下一天</button>
-              {session.is_complete && <p className="muted">已到达最后一个有效交易日。</p>}
-            </>
-          ) : (
-            <p className="muted">请先创建训练会话。</p>
-          )}
+          <PortfolioSummary session={session} onNextDay={nextDay} loading={loading} />
         </article>
+      </section>
+
+      <section className="card market-card">
+        <h2>资产曲线</h2>
+        <EquityCurve snapshots={session?.daily_snapshots} />
       </section>
 
       {bar && (

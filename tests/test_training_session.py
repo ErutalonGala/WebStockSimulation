@@ -42,3 +42,30 @@ def test_next_day_advances_to_next_market_bar_only():
 
     with pytest.raises(TrainingSessionCompleteError):
         service.next_day(created["id"])
+
+
+def test_performance_metrics_and_snapshots_use_current_close():
+    service = TrainingSessionService(market_data_service=FakeMarketDataService())
+    created = service.create_session("AAPL", "2024-01-06", 100000)
+    raw_session = service._get_session(created["id"])
+    raw_session.current_cash = 89500
+    raw_session.current_position_quantity = 100
+    raw_session.current_position_cost = 100
+
+    first_day = service.get_session(created["id"])
+
+    assert first_day["market_value"] == 10500
+    assert first_day["total_assets"] == 100000
+    assert first_day["floating_pnl"] == 500
+    assert first_day["floating_pnl_ratio"] == 0.05
+    assert first_day["daily_pnl"] == 0
+    assert first_day["cumulative_return"] == 0
+
+    advanced = service.next_day(created["id"])
+
+    assert advanced["market_value"] == 11100
+    assert advanced["total_assets"] == 100600
+    assert advanced["floating_pnl"] == 1100
+    assert advanced["daily_pnl"] == 600
+    assert advanced["cumulative_return"] == 0.006
+    assert advanced["daily_snapshots"][-1]["cumulative_return"] == 0.006

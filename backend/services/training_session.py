@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from backend.models.training_session import TrainingSession
 from backend.services.market_data import DailyBar, MarketDataService
+from backend.services.performance import PerformanceService
 
 
 class TrainingSessionNotFoundError(Exception):
@@ -22,6 +23,7 @@ class TrainingSessionService:
 
     def __init__(self, market_data_service: MarketDataService | None = None) -> None:
         self.market_data_service = market_data_service or MarketDataService()
+        self.performance_service = PerformanceService()
         self._sessions: dict[str, TrainingSession] = {}
 
     def create_session(self, symbol: str, start_date: str | date, initial_cash: float) -> dict[str, object]:
@@ -38,7 +40,7 @@ class TrainingSessionService:
             current_cash=initial_cash,
             market_data=tradable_bars,
         )
-        session.capture_snapshot()
+        self.performance_service.capture_snapshot(session)
         self._sessions[session.id] = session
         return self.serialize(session)
 
@@ -50,25 +52,31 @@ class TrainingSessionService:
         if session.current_day_index >= len(session.market_data) - 1:
             raise TrainingSessionCompleteError("训练会话已经到达最后一个有效交易日")
         session.current_day_index += 1
-        session.capture_snapshot()
+        self.performance_service.capture_snapshot(session)
         return self.serialize(session)
 
     def serialize(self, session: TrainingSession) -> dict[str, object]:
         current_bar = session.current_bar
-        current_price = current_bar.close or current_bar.adj_close or 0.0
-        market_value = round(session.current_position_quantity * current_price, 2)
+        performance = self.performance_service.calculate(session)
         return {
             "id": session.id,
             "symbol": session.symbol,
             "start_date": session.start_date,
             "current_trading_date": current_bar.date,
             "current_day_index": session.current_day_index,
-            "initial_cash": session.initial_cash,
-            "current_cash": round(session.current_cash, 2),
-            "current_position_quantity": session.current_position_quantity,
-            "current_position_cost": round(session.current_position_cost, 6),
-            "market_value": market_value,
-            "total_assets": round(session.current_cash + market_value, 2),
+            "initial_cash": performance.initial_cash,
+            "current_cash": performance.current_cash,
+            "current_position_quantity": performance.current_position_quantity,
+            "current_position_cost": performance.current_position_cost,
+            "market_value": performance.market_value,
+            "total_assets": performance.total_assets,
+            "floating_pnl": performance.floating_pnl,
+            "floating_pnl_ratio": performance.floating_pnl_ratio,
+            "daily_pnl": performance.daily_pnl,
+            "cumulative_return": performance.cumulative_return,
+            "has_valid_market_data": performance.has_valid_market_data,
+            "performance_message": performance.message,
+            "performance": performance.to_dict(),
             "current_bar": asdict(current_bar),
             "trade_history": [asdict(trade) for trade in session.trade_history],
             "daily_snapshots": [asdict(snapshot) for snapshot in session.daily_snapshots],
