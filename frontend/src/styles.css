@@ -73,3 +73,10 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .chart-line { fill: none; stroke: #f97316; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .price-chart circle { fill: #f97316; }
 .card h2 { margin-top: 0; }
+.ma-controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; color: #334155; font-size: 0.95rem; }
+.ma-controls label { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 700; cursor: pointer; }
+.ma-controls input { width: 1rem; height: 1rem; padding: 0; border-radius: 4px; }
+.ma-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.ma-line.ma5 { stroke: #14b8a6; }
+.ma-line.ma10 { stroke: #7c3aed; stroke-dasharray: 8 5; }
+.ma-line.ma30 { stroke: #0f766e; stroke-dasharray: 3 5; }

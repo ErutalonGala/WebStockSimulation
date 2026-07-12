@@ -1,14 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 type PriceBar = { date: string; close?: number | null };
 
 type PriceChartProps = { bars: PriceBar[]; currentDate: string };
 
+type ChartPoint = PriceBar & { close: number; x: number; y: number };
+
+type MovingAveragePoint = { date: string; value: number; x: number; y: number };
+
+const buildPath = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+
+const calculateMovingAverage = (bars: Array<PriceBar & { close: number }>, windowSize: number) => bars.reduce<Array<{ date: string; value: number; index: number }>>((averages, bar, index) => {
+  if (index + 1 < windowSize) {
+    return averages;
+  }
+
+  const windowBars = bars.slice(index + 1 - windowSize, index + 1);
+  const value = windowBars.reduce((sum, windowBar) => sum + windowBar.close, 0) / windowSize;
+  averages.push({ date: bar.date, value, index });
+  return averages;
+}, []);
+
 export default function PriceChart({ bars, currentDate }: PriceChartProps) {
+  const [showMa5, setShowMa5] = useState(true);
+  const [showMa10, setShowMa10] = useState(true);
+  const [showMa30, setShowMa30] = useState(true);
+
   const currentBarIndex = bars.findIndex((bar) => bar.date === currentDate);
   const visibleBars = bars
     .slice(0, currentBarIndex >= 0 ? currentBarIndex + 1 : bars.length)
-    .filter((bar) => typeof bar.close === 'number');
+    .filter((bar): bar is PriceBar & { close: number } => typeof bar.close === 'number');
   if (visibleBars.length === 0) {
     return <p className="muted">暂无可绘制行情数据。</p>;
   }
@@ -16,21 +37,54 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
   const width = 760;
   const height = 260;
   const padding = 32;
-  const prices = visibleBars.map((bar) => bar.close as number);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
+  const ma5 = calculateMovingAverage(visibleBars, 5);
+  const ma10 = calculateMovingAverage(visibleBars, 10);
+  const ma30 = calculateMovingAverage(visibleBars, 30);
+  const enabledMovingAverageValues = [
+    ...(showMa5 ? ma5.map((point) => point.value) : []),
+    ...(showMa10 ? ma10.map((point) => point.value) : []),
+    ...(showMa30 ? ma30.map((point) => point.value) : []),
+  ];
+  const prices = visibleBars.map((bar) => bar.close);
+  const yValues = [...prices, ...enabledMovingAverageValues];
+  const min = Math.min(...yValues);
+  const max = Math.max(...yValues);
   const span = max - min || 1;
-  const points = visibleBars.map((bar, index) => {
-    const x = visibleBars.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (visibleBars.length - 1);
-    const y = height - padding - (((bar.close as number) - min) * (height - padding * 2)) / span;
-    return { ...bar, x, y };
-  });
-  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const getX = (index: number) => (visibleBars.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (visibleBars.length - 1));
+  const getY = (value: number) => height - padding - ((value - min) * (height - padding * 2)) / span;
+  const points: ChartPoint[] = visibleBars.map((bar, index) => ({ ...bar, x: getX(index), y: getY(bar.close) }));
+  const path = buildPath(points);
+  const mapMovingAveragePoints = (averages: Array<{ date: string; value: number; index: number }>): MovingAveragePoint[] => averages.map((point) => ({
+    date: point.date,
+    value: point.value,
+    x: getX(point.index),
+    y: getY(point.value),
+  }));
+  const ma5Path = buildPath(mapMovingAveragePoints(ma5));
+  const ma10Path = buildPath(mapMovingAveragePoints(ma10));
+  const ma30Path = buildPath(mapMovingAveragePoints(ma30));
 
   return (
     <div className="price-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价折线图">
+      <div className="ma-controls" aria-label="移动均线显示设置">
+        <label>
+          <input type="checkbox" checked={showMa5} onChange={(event) => setShowMa5(event.target.checked)} />
+          5日均线
+        </label>
+        <label>
+          <input type="checkbox" checked={showMa10} onChange={(event) => setShowMa10(event.target.checked)} />
+          10日均线
+        </label>
+        <label>
+          <input type="checkbox" checked={showMa30} onChange={(event) => setShowMa30(event.target.checked)} />
+          30日均线
+        </label>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价与移动均线折线图">
         <path className="chart-line" d={path} />
+        {showMa5 && ma5Path && <path className="ma-line ma5" d={ma5Path} />}
+        {showMa10 && ma10Path && <path className="ma-line ma10" d={ma10Path} />}
+        {showMa30 && ma30Path && <path className="ma-line ma30" d={ma30Path} />}
         {points.map((point) => <circle key={point.date} cx={point.x} cy={point.y} r="4" />)}
       </svg>
       <div className="curve-caption">
