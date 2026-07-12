@@ -2,10 +2,13 @@ import React from 'react';
 
 type PriceBar = { date: string; close?: number | null };
 
-type PriceChartProps = { bars: PriceBar[]; currentIndex: number };
+type PriceChartProps = { bars: PriceBar[]; currentDate: string };
 
-export default function PriceChart({ bars, currentIndex }: PriceChartProps) {
-  const visibleBars = bars.slice(0, currentIndex + 1).filter((bar) => typeof bar.close === 'number');
+export default function PriceChart({ bars, currentDate }: PriceChartProps) {
+  const currentBarIndex = bars.findIndex((bar) => bar.date === currentDate);
+  const visibleBars = bars
+    .slice(0, currentBarIndex >= 0 ? currentBarIndex + 1 : bars.length)
+    .filter((bar) => typeof bar.close === 'number');
   if (visibleBars.length === 0) {
     return <p className="muted">暂无可绘制行情数据。</p>;
   }

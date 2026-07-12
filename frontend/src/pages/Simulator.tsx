@@ -35,6 +35,12 @@ const money = (value: number | null | undefined) =>
 
 const numberText = (value: number | null | undefined) => value?.toLocaleString('zh-CN') || '-';
 
+function getChartStartDate(sessionStartDate: string) {
+  const date = new Date(sessionStartDate);
+  date.setUTCFullYear(date.getUTCFullYear() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 async function request(path: string, options: RequestInit = {}) {
   let response: Response;
   try {
@@ -100,7 +106,8 @@ export default function Simulator() {
       setPreviousTotalAssets(Number(created.total_assets || created.current_cash));
 
       try {
-        const historyPayload = await request(`/api/stocks/${created.symbol}/history?start_date=${created.start_date}`);
+        const chartStartDate = getChartStartDate(created.start_date);
+        const historyPayload = await request(`/api/stocks/${created.symbol}/history?start_date=${chartStartDate}`);
         setHistory(historyPayload.data || [created.current_bar]);
       } catch (historyError) {
         setHistory([created.current_bar]);
@@ -228,7 +235,7 @@ export default function Simulator() {
               <div><dt>收盘价</dt><dd>{money(currentBar.close)}</dd></div>
               <div><dt>成交量</dt><dd>{numberText(currentBar.volume)}</dd></div>
             </dl>
-            <PriceChart bars={chartBars} currentIndex={session?.current_day_index || 0} />
+            <PriceChart bars={chartBars} currentDate={session.current_trading_date} />
           </>
         ) : (
           <p className="muted">训练尚未开始，暂无行情数据。</p>
