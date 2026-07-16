@@ -34,13 +34,15 @@ class TrainingSessionService:
 
     def create_session(self, symbol: str, start_date: str | date, initial_cash: float) -> dict[str, object]:
         normalized_start = self._normalize_date(start_date)
-        bars = self.market_data_service.get_history(symbol, start_date=normalized_start)
+        resolve_symbol = getattr(self.market_data_service, "resolve_symbol", lambda value: value.strip().upper())
+        resolved_symbol = resolve_symbol(symbol)
+        bars = self.market_data_service.get_history(resolved_symbol, start_date=normalized_start)
         tradable_bars = [bar for bar in bars if self._has_price(bar)]
         if not tradable_bars:
             raise ValueError("No valid trading days found for the requested session")
 
         session = TrainingSession(
-            symbol=symbol.strip().upper(),
+            symbol=resolved_symbol,
             start_date=normalized_start,
             initial_cash=initial_cash,
             current_cash=initial_cash,

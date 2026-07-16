@@ -11,11 +11,12 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
 import json
 import os
+import re
 from pathlib import Path
 import time
 from typing import Any, Iterable
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 
@@ -53,6 +54,8 @@ class MarketDataService:
     """Fetch and cache daily historical stock data."""
 
     YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+    EASTMONEY_SUGGEST_URL = "https://searchapi.eastmoney.com/api/suggest/get"
+    EASTMONEY_TOKEN = "44c9d251add88e27b65ed86506f6e5da"
     CACHE_VERSION = 1
 
     def __init__(
@@ -89,7 +92,7 @@ class MarketDataService:
             DataSourceUnavailableError: Network, HTTP, or response parsing failure.
         """
 
-        normalized_symbol = self._normalize_symbol(symbol)
+        normalized_symbol = self.resolve_symbol(symbol)
         start = self._parse_date(start_date, "start_date") if start_date else None
         end = self._parse_date(end_date, "end_date") if end_date else None
         if start and end and start > end:
@@ -208,6 +211,58 @@ class MarketDataService:
     def _cache_path(self, symbol: str) -> Path:
         safe_symbol = symbol.replace("/", "_").replace("\\", "_").upper()
         return self.cache_dir / f"{safe_symbol}.json"
+
+    def resolve_symbol(self, symbol: str) -> str:
+        """Return a Yahoo Finance compatible ticker for US or A-share input.
+
+        US tickers are kept as uppercase symbols. A-share numeric codes are
+        automatically suffixed with their exchange, and Chinese stock names are
+        resolved through Eastmoney's suggestion API before requesting Yahoo
+        Finance historical bars.
+        """
+
+        normalized = self._normalize_symbol(symbol)
+        if self._is_chinese_query(normalized):
+            return self._lookup_a_share_symbol(symbol.strip())
+        if re.fullmatch(r"\d{6}", normalized):
+            return self._suffix_a_share_code(normalized)
+        return normalized
+
+    def _lookup_a_share_symbol(self, query: str) -> str:
+        params = urlencode({"input": query, "type": "14", "token": self.EASTMONEY_TOKEN})
+        request = Request(
+            f"{self.EASTMONEY_SUGGEST_URL}?{params}",
+            headers={"User-Agent": "codex-rp-market-data/1.0"},
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310 - trusted HTTPS endpoint.
+                payload = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError) as exc:
+            raise DataSourceUnavailableError("A-share symbol search is unavailable") from exc
+        except json.JSONDecodeError as exc:
+            raise DataSourceUnavailableError("A-share symbol search returned invalid JSON") from exc
+
+        suggestions = ((payload.get("QuotationCodeTable") or {}).get("Data") or [])
+        for item in suggestions:
+            code = str(item.get("Code") or "")
+            security_type = str(item.get("SecurityTypeName") or item.get("SecurityType") or "")
+            if re.fullmatch(r"\d{6}", code) and ("A股" in security_type or not security_type):
+                return self._suffix_a_share_code(code)
+        raise InvalidSymbolError(f"Unknown A-share stock name: {query}")
+
+    @staticmethod
+    def _suffix_a_share_code(code: str) -> str:
+        if code.startswith("6"):
+            return f"{code}.SS"
+        if code.startswith(("0", "3")):
+            return f"{code}.SZ"
+        if code.startswith(("4", "8")):
+            return f"{code}.BJ"
+        raise InvalidSymbolError(f"Unsupported A-share stock code: {code}")
+
+    @staticmethod
+    def _is_chinese_query(value: str) -> bool:
+        return any("\u4e00" <= char <= "\u9fff" for char in value)
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:

@@ -86,7 +86,8 @@ def get_stock_history(
     """Return cached daily history for a stock symbol."""
 
     try:
-        bars = market_data_service.get_history(symbol, start_date=start_date, end_date=end_date)
+        resolved_symbol = market_data_service.resolve_symbol(symbol)
+        bars = market_data_service.get_history(resolved_symbol, start_date=start_date, end_date=end_date)
     except InvalidSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -96,9 +97,9 @@ def get_stock_history(
     except DataSourceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    training_session_service.repository.save_stock_prices(symbol, bars)
+    training_session_service.repository.save_stock_prices(resolved_symbol, bars)
     return {
-        "symbol": symbol.strip().upper(),
+        "symbol": resolved_symbol,
         "start_date": bars[0].date,
         "end_date": bars[-1].date,
         "count": len(bars),
