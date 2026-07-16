@@ -81,6 +81,16 @@ def test_numeric_a_share_code_resolves_to_yahoo_exchange_suffix(tmp_path):
     assert service.resolve_symbol("000001") == "000001.SZ"
 
 
+def test_common_chinese_a_share_name_resolves_without_remote_lookup(monkeypatch, tmp_path):
+    def fail_urlopen(request, timeout):
+        raise AssertionError("common A-share alias should not call remote search")
+
+    monkeypatch.setattr("backend.services.market_data.urlopen", fail_urlopen)
+    service = MarketDataService(cache_dir=tmp_path)
+
+    assert service.resolve_symbol("贵州茅台") == "600519.SS"
+
+
 def test_chinese_a_share_name_resolves_from_suggestions(monkeypatch, tmp_path):
     class FakeResponse:
         def __enter__(self):
@@ -92,15 +102,15 @@ def test_chinese_a_share_name_resolves_from_suggestions(monkeypatch, tmp_path):
         def read(self):
             return json.dumps({
                 "QuotationCodeTable": {
-                    "Data": [{"Code": "600519", "SecurityTypeName": "沪深A股"}]
+                    "Data": [{"Code": "600036", "SecurityTypeName": "沪深A股"}]
                 }
             }).encode("utf-8")
 
     def fake_urlopen(request, timeout):
-        assert "%E8%B4%B5%E5%B7%9E%E8%8C%85%E5%8F%B0" in request.full_url
+        assert "%E6%8B%9B%E5%95%86%E9%93%B6%E8%A1%8C" in request.full_url
         return FakeResponse()
 
     monkeypatch.setattr("backend.services.market_data.urlopen", fake_urlopen)
     service = MarketDataService(cache_dir=tmp_path)
 
-    assert service.resolve_symbol("贵州茅台") == "600519.SS"
+    assert service.resolve_symbol("招商银行") == "600036.SS"
