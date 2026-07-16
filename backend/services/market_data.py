@@ -57,6 +57,9 @@ class MarketDataService:
     EASTMONEY_SUGGEST_URL = "https://searchapi.eastmoney.com/api/suggest/get"
     EASTMONEY_TOKEN = "44c9d251add88e27b65ed86506f6e5da"
     CACHE_VERSION = 1
+    A_SHARE_NAME_ALIASES = {
+        "贵州茅台": "600519",
+    }
 
     def __init__(
         self,
@@ -229,6 +232,10 @@ class MarketDataService:
         return normalized
 
     def _lookup_a_share_symbol(self, query: str) -> str:
+        alias_code = self.A_SHARE_NAME_ALIASES.get(query)
+        if alias_code:
+            return self._suffix_a_share_code(alias_code)
+
         params = urlencode({"input": query, "type": "14", "token": self.EASTMONEY_TOKEN})
         request = Request(
             f"{self.EASTMONEY_SUGGEST_URL}?{params}",
