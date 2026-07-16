@@ -103,7 +103,7 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .ma-line.ma30 { stroke: #0f766e; stroke-dasharray: 3 5; }
 .setup-card { margin-bottom: 1.5rem; }
 .setup-card .simulator-form {
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) minmax(150px, auto);
+  grid-template-columns: minmax(160px, 0.8fr) repeat(3, minmax(180px, 1fr)) minmax(150px, auto);
   align-items: end;
 }
 .simulator-workspace {
@@ -150,4 +150,25 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   .chart-toolbar { align-items: flex-start; flex-direction: column; }
   .zoom-control { width: 100%; }
   .zoom-control input[type='range'] { flex: 1; width: auto; }
+}
+.market-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.market-toggle legend {
+  grid-column: 1 / -1;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+.market-toggle button {
+  background: #e2e8f0;
+  color: #334155;
+}
+.market-toggle button.active {
+  background: #2563eb;
+  color: #fff;
 }

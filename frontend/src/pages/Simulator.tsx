@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import OrderPanel from '../components/OrderPanel';
 import PortfolioSummary from '../components/PortfolioSummary';
 import PriceChart from '../components/PriceChart';
-import StockSearch from '../components/StockSearch';
+import StockSearch, { type Market } from '../components/StockSearch';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -57,6 +57,7 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export default function Simulator() {
+  const [market, setMarket] = useState<Market>('us');
   const [symbol, setSymbol] = useState('AAPL');
   const [startDate, setStartDate] = useState('2024-01-02');
   const [initialCash, setInitialCash] = useState<number | string>(100000);
@@ -107,7 +108,8 @@ export default function Simulator() {
 
       try {
         const chartStartDate = getChartStartDate(created.start_date);
-        const historyPayload = await request(`/api/stocks/${created.symbol}/history?start_date=${chartStartDate}`);
+        const encodedSymbol = encodeURIComponent(created.symbol);
+        const historyPayload = await request(`/api/stocks/${encodedSymbol}/history?start_date=${chartStartDate}`);
         setHistory(historyPayload.data || [created.current_bar]);
       } catch (historyError) {
         setHistory([created.current_bar]);
@@ -222,10 +224,12 @@ export default function Simulator() {
       <section className="card setup-card">
         <h2>训练初始化</h2>
         <StockSearch
+          market={market}
           symbol={symbol}
           startDate={startDate}
           initialCash={initialCash}
           loading={loading}
+          onMarketChange={setMarket}
           onSymbolChange={setSymbol}
           onStartDateChange={setStartDate}
           onInitialCashChange={setInitialCash}

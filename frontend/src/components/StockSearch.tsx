@@ -1,10 +1,14 @@
 import React from 'react';
 
+export type Market = 'us' | 'cn';
+
 type StockSearchProps = {
+  market: Market;
   symbol: string;
   startDate: string;
   initialCash: number | string;
   loading: boolean;
+  onMarketChange: (value: Market) => void;
   onSymbolChange: (value: string) => void;
   onStartDateChange: (value: string) => void;
   onInitialCashChange: (value: string) => void;
@@ -12,23 +16,45 @@ type StockSearchProps = {
 };
 
 export default function StockSearch({
+  market,
   symbol,
   startDate,
   initialCash,
   loading,
+  onMarketChange,
   onSymbolChange,
   onStartDateChange,
   onInitialCashChange,
   onSubmit,
 }: StockSearchProps) {
+  const isAshare = market === 'cn';
+
+  function handleMarketChange(nextMarket: Market) {
+    onMarketChange(nextMarket);
+    onSymbolChange(nextMarket === 'cn' ? '贵州茅台' : 'AAPL');
+  }
+
+  function handleSymbolChange(value: string) {
+    onSymbolChange(isAshare ? value.trim() : value.toUpperCase().trim());
+  }
+
   return (
     <form onSubmit={onSubmit} className="form-stack simulator-form">
+      <fieldset className="market-toggle" aria-label="选择股票市场">
+        <legend>市场</legend>
+        <button type="button" className={market === 'us' ? 'active' : ''} onClick={() => handleMarketChange('us')}>
+          美股
+        </button>
+        <button type="button" className={market === 'cn' ? 'active' : ''} onClick={() => handleMarketChange('cn')}>
+          A股
+        </button>
+      </fieldset>
       <label>
-        股票代码
+        {isAshare ? '股票代码 / 中文名称' : '股票代码'}
         <input
           value={symbol}
-          onChange={(event) => onSymbolChange(event.target.value.toUpperCase())}
-          placeholder="AAPL"
+          onChange={(event) => handleSymbolChange(event.target.value)}
+          placeholder={isAshare ? '600519 或 贵州茅台' : 'AAPL'}
           required
         />
       </label>

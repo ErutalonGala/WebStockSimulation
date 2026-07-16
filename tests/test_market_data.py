@@ -72,3 +72,35 @@ def test_invalid_date_range_rejected(tmp_path):
 
     with pytest.raises(ValueError):
         service.get_history("AAPL", start_date="2024-02-01", end_date="2024-01-01")
+
+
+def test_numeric_a_share_code_resolves_to_yahoo_exchange_suffix(tmp_path):
+    service = MarketDataService(cache_dir=tmp_path)
+
+    assert service.resolve_symbol("600519") == "600519.SS"
+    assert service.resolve_symbol("000001") == "000001.SZ"
+
+
+def test_chinese_a_share_name_resolves_from_suggestions(monkeypatch, tmp_path):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return json.dumps({
+                "QuotationCodeTable": {
+                    "Data": [{"Code": "600519", "SecurityTypeName": "沪深A股"}]
+                }
+            }).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        assert "%E8%B4%B5%E5%B7%9E%E8%8C%85%E5%8F%B0" in request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr("backend.services.market_data.urlopen", fake_urlopen)
+    service = MarketDataService(cache_dir=tmp_path)
+
+    assert service.resolve_symbol("贵州茅台") == "600519.SS"
