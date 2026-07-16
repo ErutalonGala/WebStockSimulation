@@ -2,13 +2,30 @@ import React, { useState } from 'react';
 
 type PriceBar = { date: string; close?: number | null };
 
-type PriceChartProps = { bars: PriceBar[]; currentDate: string };
+type TradeMarker = {
+  id: string;
+  date: string;
+  type: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  pnl?: number;
+};
+
+type PriceChartProps = { bars: PriceBar[]; currentDate: string; tradeMarkers?: TradeMarker[] };
 
 type ChartPoint = PriceBar & { close: number; x: number; y: number };
 
 type MovingAveragePoint = { date: string; value: number; x: number; y: number };
 
+type VisibleTradeMarker = TradeMarker & { x: number; y: number; offsetIndex: number };
+
 const priceFormatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' });
+const pnlFormatter = new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'USD',
+  signDisplay: 'always',
+  maximumFractionDigits: 2,
+});
 
 const buildPath = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
 
@@ -23,7 +40,7 @@ const calculateMovingAverage = (bars: Array<PriceBar & { close: number }>, windo
   return averages;
 }, []);
 
-export default function PriceChart({ bars, currentDate }: PriceChartProps) {
+export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: PriceChartProps) {
   const [showClosePrice, setShowClosePrice] = useState(true);
   const [showMa5, setShowMa5] = useState(true);
   const [showMa10, setShowMa10] = useState(true);
@@ -72,6 +89,22 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
   const ma5Path = buildPath(mapMovingAveragePoints(ma5));
   const ma10Path = buildPath(mapMovingAveragePoints(ma10));
   const ma30Path = buildPath(mapMovingAveragePoints(ma30));
+  const visibleIndexByDate = new Map(visibleBars.map((bar, index) => [bar.date, index]));
+  const markerCountByDate = new Map<string, number>();
+  const visibleTradeMarkers: VisibleTradeMarker[] = tradeMarkers.reduce<VisibleTradeMarker[]>((markers, marker) => {
+    const index = visibleIndexByDate.get(marker.date);
+    if (index === undefined) return markers;
+
+    const sameDateCount = markerCountByDate.get(marker.date) || 0;
+    markerCountByDate.set(marker.date, sameDateCount + 1);
+    markers.push({
+      ...marker,
+      x: getX(index),
+      y: getY(marker.price),
+      offsetIndex: sameDateCount,
+    });
+    return markers;
+  }, []);
   const tooltipWidth = 148;
   const tooltipHeight = 58;
   const tooltipX = hoveredPoint ? Math.min(hoveredPoint.x + 12, width - padding - tooltipWidth) : 0;
@@ -97,6 +130,8 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
             <input type="checkbox" checked={showMa30} onChange={(event) => setShowMa30(event.target.checked)} />
             <span className="legend-text legend-ma30">30日均线</span>
           </label>
+          <span className="legend-text trade-legend-buy">买入点</span>
+          <span className="legend-text trade-legend-sell">卖出点 / 做T盈亏</span>
         </div>
         <label className="zoom-control">
           缩放
@@ -112,7 +147,7 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
           <span>{zoomLevel.toFixed(1)}x</span>
         </label>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价与移动均线折线图">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价、移动均线与买卖点折线图">
         {showClosePrice && <path className="chart-line" d={path} />}
         {showMa5 && ma5Path && <path className="ma-line ma5" d={ma5Path} />}
         {showMa10 && ma10Path && <path className="ma-line ma10" d={ma10Path} />}
@@ -120,6 +155,7 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
         {showClosePrice && points.map((point) => (
           <circle
             key={point.date}
+            className="price-point"
             cx={point.x}
             cy={point.y}
             r="2.5"
@@ -133,6 +169,27 @@ export default function PriceChart({ bars, currentDate }: PriceChartProps) {
             <title>{`${point.date} 收盘价 ${priceFormatter.format(point.close)}`}</title>
           </circle>
         ))}
+        {visibleTradeMarkers.map((marker) => {
+          const labelY = marker.y - 14 - marker.offsetIndex * 20;
+          const safeLabelY = Math.max(18, labelY);
+          return (
+            <g key={marker.id} className={`trade-marker trade-marker-${marker.type}`}>
+              <circle
+                cx={marker.x}
+                cy={marker.y}
+                r="6"
+                aria-label={`${marker.date} ${marker.type === 'buy' ? '买入' : '卖出'} ${marker.quantity} 股，价格 ${priceFormatter.format(marker.price)}${marker.type === 'sell' && typeof marker.pnl === 'number' ? `，做T盈亏 ${pnlFormatter.format(marker.pnl)}` : ''}`}
+              >
+                <title>{`${marker.date} ${marker.type === 'buy' ? '买入' : '卖出'} ${marker.quantity} 股 @ ${priceFormatter.format(marker.price)}${marker.type === 'sell' && typeof marker.pnl === 'number' ? `，做T盈亏 ${pnlFormatter.format(marker.pnl)}` : ''}`}</title>
+              </circle>
+              {marker.type === 'sell' && typeof marker.pnl === 'number' && (
+                <text className="trade-pnl-label" x={marker.x + 8} y={safeLabelY}>
+                  {pnlFormatter.format(marker.pnl)}
+                </text>
+              )}
+            </g>
+          );
+        })}
         {showClosePrice && hoveredPoint && (
           <g className="chart-tooltip" pointerEvents="none">
             <line className="chart-hover-line" x1={hoveredPoint.x} x2={hoveredPoint.x} y1={padding} y2={height - padding} />

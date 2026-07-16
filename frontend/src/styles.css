@@ -172,3 +172,30 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   background: #2563eb;
   color: #fff;
 }
+.price-chart circle.price-point { fill: #f97316; cursor: pointer; outline: none; }
+.price-chart circle.price-point:focus { stroke: #0f172a; stroke-width: 2; }
+.trade-legend-buy { color: #dc2626; }
+.trade-legend-buy::before, .trade-legend-sell::before {
+  content: '';
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.3rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.trade-legend-buy::before { background: #dc2626; }
+.trade-legend-sell { color: #2563eb; }
+.trade-legend-sell::before { background: #2563eb; }
+.trade-marker circle { stroke: #ffffff; stroke-width: 2.5; filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.3)); }
+.trade-marker-buy circle { fill: #dc2626; }
+.trade-marker-sell circle { fill: #2563eb; }
+.trade-pnl-label {
+  fill: #0f172a;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  font-size: 0.85rem;
+  font-weight: 900;
+}
