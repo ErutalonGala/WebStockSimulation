@@ -15,6 +15,15 @@ type MarketBar = {
   volume: number;
 };
 
+type TradeMarker = {
+  id: string;
+  date: string;
+  type: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  pnl?: number;
+};
+
 type Session = {
   id: string;
   symbol: string;
@@ -73,6 +82,7 @@ export default function Simulator() {
   const [errorMessage, setErrorMessage] = useState('');
   const [tradeMessage, setTradeMessage] = useState('');
   const [dataMessage, setDataMessage] = useState('');
+  const [tradeMarkers, setTradeMarkers] = useState<TradeMarker[]>([]);
 
   const currentBar = session?.current_bar;
   const closePrice = currentBar?.close || 0;
@@ -105,6 +115,7 @@ export default function Simulator() {
       setPositionQuantity(Number(created.current_position_quantity || 0));
       setPositionCost(Number(created.current_position_cost || 0));
       setPreviousTotalAssets(Number(created.total_assets || created.current_cash));
+      setTradeMarkers([]);
 
       try {
         const chartStartDate = getChartStartDate(created.start_date);
@@ -117,6 +128,7 @@ export default function Simulator() {
       }
     } catch (error) {
       setSession(null);
+      setTradeMarkers([]);
       setErrorMessage(`数据加载失败：${(error as Error).message}`);
     } finally {
       setLoading(false);
@@ -138,6 +150,16 @@ export default function Simulator() {
     setPositionCost((positionCost * positionQuantity + cost) / newQuantity);
     setPositionQuantity(newQuantity);
     setCash(cash - cost);
+    setTradeMarkers((markers) => [
+      ...markers,
+      {
+        id: `${currentBar.date}-buy-${markers.length}`,
+        date: currentBar.date,
+        type: 'buy',
+        price: currentBar.close,
+        quantity,
+      },
+    ]);
     setTradeMessage(`买入成功：以收盘价 ${money(currentBar.close)} 买入 ${quantity} 股。`);
   }
 
@@ -169,11 +191,23 @@ export default function Simulator() {
       setTradeMessage('交易失败：卖出数量不能超过当前持仓。');
       return;
     }
+    const tPnl = (currentBar.close - positionCost) * quantity;
     const remaining = positionQuantity - quantity;
     setPositionQuantity(remaining);
     setPositionCost(remaining === 0 ? 0 : positionCost);
     setCash(cash + quantity * currentBar.close);
-    setTradeMessage(`卖出成功：以收盘价 ${money(currentBar.close)} 卖出 ${quantity} 股。`);
+    setTradeMarkers((markers) => [
+      ...markers,
+      {
+        id: `${currentBar.date}-sell-${markers.length}`,
+        date: currentBar.date,
+        type: 'sell',
+        price: currentBar.close,
+        quantity,
+        pnl: tPnl,
+      },
+    ]);
+    setTradeMessage(`卖出成功：以收盘价 ${money(currentBar.close)} 卖出 ${quantity} 股，做T盈亏 ${money(tPnl)}。`);
   }
 
   async function nextDay() {
@@ -243,7 +277,7 @@ export default function Simulator() {
         <article className="card chart-card">
           <h2>股价曲线</h2>
           {currentBar ? (
-            <PriceChart bars={chartBars} currentDate={session.current_trading_date} />
+            <PriceChart bars={chartBars} currentDate={session.current_trading_date} tradeMarkers={tradeMarkers} />
           ) : (
             <p className="muted">训练尚未开始，暂无行情数据。</p>
           )}
