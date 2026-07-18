@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-type PriceBar = { date: string; close?: number | null };
+type PriceBar = { date: string; close?: number | null; volume?: number | null };
 
 type TradeMarker = {
   id: string;
@@ -20,6 +20,7 @@ type MovingAveragePoint = { date: string; value: number; x: number; y: number };
 type VisibleTradeMarker = TradeMarker & { x: number; y: number; offsetIndex: number };
 
 const priceFormatter = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' });
+const compactNumberFormatter = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 });
 const pnlFormatter = new Intl.NumberFormat('zh-CN', {
   style: 'currency',
   currency: 'USD',
@@ -28,6 +29,42 @@ const pnlFormatter = new Intl.NumberFormat('zh-CN', {
 });
 
 const buildPath = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+
+const normalizeIndicatorSpan = (minValue: number, maxValue: number) => {
+  if (minValue === maxValue) {
+    const fallback = Math.abs(minValue) || 1;
+    return { min: minValue - fallback, max: maxValue + fallback };
+  }
+  return { min: minValue, max: maxValue };
+};
+
+const calculateEmaSeries = (bars: Array<PriceBar & { close: number }>, period: number) => {
+  const multiplier = 2 / (period + 1);
+  return bars.reduce<number[]>((values, bar, index) => {
+    const previous = values[index - 1] ?? bar.close;
+    values.push(index === 0 ? bar.close : (bar.close - previous) * multiplier + previous);
+    return values;
+  }, []);
+};
+
+const calculateMacd = (bars: Array<PriceBar & { close: number }>) => {
+  const ema12 = calculateEmaSeries(bars, 12);
+  const ema26 = calculateEmaSeries(bars, 26);
+  const difValues = bars.map((_, index) => ema12[index] - ema26[index]);
+  const deaValues = difValues.reduce<number[]>((values, dif, index) => {
+    const previous = values[index - 1] ?? dif;
+    values.push(index === 0 ? dif : (dif - previous) * (2 / (9 + 1)) + previous);
+    return values;
+  }, []);
+
+  return bars.map((bar, index) => ({
+    date: bar.date,
+    index,
+    dif: difValues[index],
+    dea: deaValues[index],
+    histogram: (difValues[index] - deaValues[index]) * 2,
+  }));
+};
 
 const calculateMovingAverage = (bars: Array<PriceBar & { close: number }>, windowSize: number) => bars.reduce<Array<{ date: string; value: number; index: number }>>((averages, bar, index) => {
   if (index + 1 < windowSize) {
@@ -60,8 +97,14 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
   const visibleBars = availableBars.slice(-visibleCount);
   const visibleOffset = availableBars.length - visibleBars.length;
   const width = 1120;
-  const height = 520;
+  const height = 720;
   const padding = 48;
+  const priceChartHeight = 420;
+  const indicatorGap = 28;
+  const volumeTop = priceChartHeight + indicatorGap;
+  const volumeHeight = 104;
+  const macdTop = volumeTop + volumeHeight + indicatorGap;
+  const macdHeight = 120;
   const ma5 = calculateMovingAverage(availableBars, 5).filter((point) => point.index >= visibleOffset);
   const ma10 = calculateMovingAverage(availableBars, 10).filter((point) => point.index >= visibleOffset);
   const ma30 = calculateMovingAverage(availableBars, 30).filter((point) => point.index >= visibleOffset);
@@ -77,7 +120,7 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
   const max = Math.max(...safeYValues);
   const span = max - min || 1;
   const getX = (index: number) => (visibleBars.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (visibleBars.length - 1));
-  const getY = (value: number) => height - padding - ((value - min) * (height - padding * 2)) / span;
+  const getY = (value: number) => priceChartHeight - padding - ((value - min) * (priceChartHeight - padding * 2)) / span;
   const points: ChartPoint[] = visibleBars.map((bar, index) => ({ ...bar, x: getX(index), y: getY(bar.close) }));
   const path = buildPath(points);
   const mapMovingAveragePoints = (averages: Array<{ date: string; value: number; index: number }>): MovingAveragePoint[] => averages.map((point) => ({
@@ -89,6 +132,28 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
   const ma5Path = buildPath(mapMovingAveragePoints(ma5));
   const ma10Path = buildPath(mapMovingAveragePoints(ma10));
   const ma30Path = buildPath(mapMovingAveragePoints(ma30));
+  const volumeAmounts = visibleBars.map((bar) => (bar.volume || 0) * bar.close);
+  const maxVolumeAmount = Math.max(...volumeAmounts, 1);
+  const volumeBars = visibleBars.map((bar, index) => {
+    const amount = (bar.volume || 0) * bar.close;
+    const barSlotWidth = (width - padding * 2) / Math.max(visibleBars.length, 1);
+    return {
+      date: bar.date,
+      amount,
+      x: getX(index),
+      y: volumeTop + volumeHeight - (amount / maxVolumeAmount) * volumeHeight,
+      width: Math.max(2, Math.min(12, barSlotWidth * 0.68)),
+      height: (amount / maxVolumeAmount) * volumeHeight,
+    };
+  });
+  const macd = calculateMacd(availableBars).filter((point) => point.index >= visibleOffset);
+  const macdValues = macd.flatMap((point) => [point.dif, point.dea, point.histogram, 0]);
+  const { min: macdMin, max: macdMax } = normalizeIndicatorSpan(Math.min(...macdValues), Math.max(...macdValues));
+  const macdSpan = macdMax - macdMin || 1;
+  const getMacdY = (value: number) => macdTop + macdHeight - ((value - macdMin) * macdHeight) / macdSpan;
+  const macdZeroY = getMacdY(0);
+  const macdDifPath = buildPath(macd.map((point) => ({ x: getX(point.index - visibleOffset), y: getMacdY(point.dif) })));
+  const macdDeaPath = buildPath(macd.map((point) => ({ x: getX(point.index - visibleOffset), y: getMacdY(point.dea) })));
   const visibleIndexByDate = new Map(visibleBars.map((bar, index) => [bar.date, index]));
   const markerCountByDate = new Map<string, number>();
   const visibleTradeMarkers: VisibleTradeMarker[] = tradeMarkers.reduce<VisibleTradeMarker[]>((markers, marker) => {
@@ -132,6 +197,9 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
           </label>
           <span className="legend-text trade-legend-buy">买入点</span>
           <span className="legend-text trade-legend-sell">卖出点 / 做T盈亏</span>
+          <span className="legend-text volume-legend">成交额</span>
+          <span className="legend-text macd-legend-dif">DIF</span>
+          <span className="legend-text macd-legend-dea">DEA</span>
         </div>
         <label className="zoom-control">
           缩放
@@ -147,7 +215,7 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
           <span>{zoomLevel.toFixed(1)}x</span>
         </label>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价、移动均线与买卖点折线图">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="收盘价、成交额、MACD 与买卖点同步走势图">
         {showClosePrice && <path className="chart-line" d={path} />}
         {showMa5 && ma5Path && <path className="ma-line ma5" d={ma5Path} />}
         {showMa10 && ma10Path && <path className="ma-line ma10" d={ma10Path} />}
@@ -190,6 +258,43 @@ export default function PriceChart({ bars, currentDate, tradeMarkers = [] }: Pri
             </g>
           );
         })}
+
+        <line className="indicator-axis" x1={padding} x2={width - padding} y1={volumeTop + volumeHeight} y2={volumeTop + volumeHeight} />
+        <text className="indicator-label" x={padding} y={volumeTop - 8}>成交额</text>
+        <text className="indicator-value-label" x={width - padding} y={volumeTop - 8} textAnchor="end">{compactNumberFormatter.format(maxVolumeAmount)}</text>
+        {volumeBars.map((bar) => (
+          <rect
+            key={`volume-${bar.date}`}
+            className="volume-amount-bar"
+            x={bar.x - bar.width / 2}
+            y={bar.y}
+            width={bar.width}
+            height={Math.max(1, bar.height)}
+          >
+            <title>{`${bar.date} 成交额 ${priceFormatter.format(bar.amount)}`}</title>
+          </rect>
+        ))}
+        <line className="indicator-axis" x1={padding} x2={width - padding} y1={macdZeroY} y2={macdZeroY} />
+        <text className="indicator-label" x={padding} y={macdTop - 8}>MACD(12,26,9)</text>
+        {macd.map((point) => {
+          const x = getX(point.index - visibleOffset);
+          const barWidth = Math.max(2, Math.min(10, (width - padding * 2) / Math.max(visibleBars.length, 1) * 0.58));
+          const histogramY = getMacdY(point.histogram);
+          return (
+            <rect
+              key={`macd-bar-${point.date}`}
+              className={`macd-histogram ${point.histogram >= 0 ? 'positive' : 'negative'}`}
+              x={x - barWidth / 2}
+              y={Math.min(histogramY, macdZeroY)}
+              width={barWidth}
+              height={Math.max(1, Math.abs(histogramY - macdZeroY))}
+            >
+              <title>{`${point.date} MACD ${point.histogram.toFixed(3)} DIF ${point.dif.toFixed(3)} DEA ${point.dea.toFixed(3)}`}</title>
+            </rect>
+          );
+        })}
+        {macdDifPath && <path className="macd-line dif" d={macdDifPath} />}
+        {macdDeaPath && <path className="macd-line dea" d={macdDeaPath} />}
         {showClosePrice && hoveredPoint && (
           <g className="chart-tooltip" pointerEvents="none">
             <line className="chart-hover-line" x1={hoveredPoint.x} x2={hoveredPoint.x} y1={padding} y2={height - padding} />

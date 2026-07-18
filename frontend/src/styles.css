@@ -199,3 +199,26 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   font-size: 0.85rem;
   font-weight: 900;
 }
+.indicator-axis { stroke: #cbd5e1; stroke-width: 1.2; }
+.indicator-label, .indicator-value-label { fill: #475569; font-size: 0.85rem; font-weight: 900; }
+.volume-amount-bar { fill: #60a5fa; opacity: 0.68; }
+.volume-legend { color: #2563eb; }
+.volume-legend::before, .macd-legend-dif::before, .macd-legend-dea::before {
+  content: '';
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.3rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.volume-legend::before { background: #60a5fa; }
+.macd-legend-dif { color: #db2777; }
+.macd-legend-dif::before { background: #db2777; }
+.macd-legend-dea { color: #0891b2; }
+.macd-legend-dea::before { background: #0891b2; }
+.macd-histogram.positive { fill: #16a34a; opacity: 0.62; }
+.macd-histogram.negative { fill: #dc2626; opacity: 0.62; }
+.macd-line { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.macd-line.dif { stroke: #db2777; }
+.macd-line.dea { stroke: #0891b2; stroke-dasharray: 6 4; }
