@@ -1,5 +1,9 @@
 # 股票模拟交易训练平台
 
+[中文](#中文说明) | [English](#english)
+
+## 中文说明
+
 这是一个用于训练股票模拟交易与复盘能力的基础 Web 应用骨架。项目包含 React 前端、FastAPI 后端和 SQLite 数据库配置，后续可以继续接入真实行情供应商、策略回测、用户认证和更完整的交易风控逻辑。
 
 ## 项目结构
@@ -82,3 +86,92 @@ sqlite:///./database/trading_trainer.db
 ```
 
 从仓库根目录启动后端时，SQLite 文件会生成在 `database/trading_trainer.db`。当前持久化层位于 `backend/db/persistence.py`，使用标准库 `sqlite3`；如需切换到 PostgreSQL，需要新增对应数据库适配层并调整仓库实现。
+
+---
+
+## English
+
+### Stock Trading Simulation Training Platform
+
+This repository provides a foundational web application for practicing simulated stock trading and reviewing trading performance. It includes a React frontend, a FastAPI backend, and SQLite database configuration. The project can be extended with a live market data provider, strategy backtesting, user authentication, and more comprehensive trading risk controls.
+
+### Project Structure
+
+```text
+.
+├── backend/                 # FastAPI backend service
+│   ├── app/
+│   │   ├── main.py          # API entry point, health check, session, and trading endpoints
+│   │   ├── db/              # SQLAlchemy database connection
+│   │   ├── models/          # Training session, trade, position, and equity curve models
+│   │   └── services/        # Market data and simulated trading engine
+│   └── requirements.txt     # Python dependencies
+├── database/
+│   └── schema.sql           # Reference for the initial SQLite schema
+├── frontend/                # Vite + React frontend application
+│   ├── src/
+│   │   ├── main.jsx         # Training session and market data interface
+│   │   └── styles.css       # Page styles
+│   └── package.json         # Frontend dependencies and scripts
+└── README.md
+```
+
+### Core Modules
+
+- **Historical stock data:** `backend/app/services/market_data.py` provides a deterministic sample historical closing-price endpoint for frontend integration and training workflow development.
+- **Simulated trading engine:** `backend/app/services/trading_engine.py` handles buy and sell orders, cash balances, average position costs, and equity curve records.
+- **Training session management:** `backend/app/main.py` provides APIs for creating training sessions and submitting trades, and initializes the equity curve when a session is created.
+- **Frontend interface:** `frontend/src/main.jsx` provides a basic UI for checking backend health, creating a demo session, and retrieving historical stock data.
+- **Database configuration:** The backend uses SQLite by default and automatically creates its tables in `database/trading_trainer.db` when the service runs. `database/schema.sql` also provides a schema reference.
+
+### Start the Backend
+
+> Python 3.11 or later is recommended.
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+You can also start the same application directly from the repository root:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+After the backend starts, the following endpoints are available:
+
+- `GET http://localhost:8000/api/stocks/AAPL/history`
+- `GET http://localhost:8000/api/sessions`
+- `POST http://localhost:8000/api/sessions`
+- `POST http://localhost:8000/api/sessions/{session_id}/next-day`
+- `POST http://localhost:8000/api/sessions/{session_id}/orders`
+
+### Start the Frontend
+
+> Node.js 20 or later is recommended.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend is available at `http://localhost:5173` by default. To use a different backend URL, set the environment variable as follows:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
+```
+
+### Database Notes
+
+The default database connection is:
+
+```text
+sqlite:///./database/trading_trainer.db
+```
+
+When the backend is started from the repository root, the SQLite file is created at `database/trading_trainer.db`. The current persistence layer is implemented in `backend/db/persistence.py` with Python's standard-library `sqlite3` module. To switch to PostgreSQL, add an appropriate database adapter and update the repository implementation.
